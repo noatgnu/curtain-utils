@@ -11,6 +11,7 @@ python = "^3.9"
 uniprotparser = "^1.1.0"
 click = "^8.1.7"
 pandas = "^2.1.0"
+requests = "^2.31.0"
 
 [tool.poetry.scripts]
 msf-curtainptm = "curtainutils.msfragger:main"
