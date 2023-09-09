@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "curtainutils"
+version = "0.1.0"
+description = ""
+authors = ["Toan Phung <toan.phung@proteo.info>"]
+readme = "README.md"
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+uniprotparser = "^1.1.0"
+click = "^8.1.7"
+pandas = "^2.1.0"
+
+[tool.poetry.scripts]
+msf-curtainptm = "curtainutils.msfragger:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
