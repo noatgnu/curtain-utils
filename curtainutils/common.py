@@ -1,6 +1,8 @@
 from typing import List
-
+import requests
 import pandas as pd
+import json
+import io
 from copy import deepcopy
 from uniprotparser.betaparser import UniprotSequence
 
@@ -52,20 +54,7 @@ curtain_base_project_form = {
     "softwares": [{"name": ""}],
 }
 
-curtain_base_payload = {
-    "raw": "",
-    "rawForm": curtain_base_raw_form,
-    "differentialForm": curtain_base_de_form,
-    "processed": "",
-    "password": "",
-    "selections": [],
-    "selectionsMap": {},
-    "selectionsName": [],
-    "settings": {},
-    "fetchUniprot": True,
-    "annotatedData": {},
-    "extraData": {}
-}
+
 
 curtain_base_settings = {
     "fetchUniprot": True,
@@ -74,7 +63,7 @@ curtain_base_settings = {
     "pCutoff": 0.05,
     "log2FCCutoff": 0.6,
     "description": "",
-    "uniprot": True,
+    "uniprot": False,
     "colorMap": {},
     "backGroundColorGrey": False,
     "selectedComparison": [],
@@ -143,6 +132,19 @@ curtain_base_settings = {
     "customVolcanoTextCol": ""
 }
 
+curtain_base_payload = {
+    "raw": "",
+    "rawForm": curtain_base_raw_form,
+    "differentialForm": curtain_base_de_form,
+    "processed": "",
+    "password": "",
+    "selections": [],
+    "selectionsMap": {},
+    "selectionsName": [],
+    "settings": curtain_base_settings,
+    "fetchUniprot": True,
+    "annotatedData": {},
+}
 def read_fasta(fasta_file: str) -> pd.DataFrame:
     fasta_dict = {}
     with open(fasta_file, 'r') as f:
@@ -162,7 +164,8 @@ def read_fasta(fasta_file: str) -> pd.DataFrame:
                 fasta_dict[current_acc] += line.strip()
     return pd.DataFrame([[k, fasta_dict[k]] for k in fasta_dict], columns=["Entry", "Sequence"])
 
-def create_curtain_session(
+
+def create_curtain_session_payload(
         de_file: str,
         raw_file: str,
         fc_col: str,
@@ -174,7 +177,7 @@ def create_curtain_session(
         comp_select: List[str],
         primary_id_de_col: str,
         primary_id_raw_col:str,
-        sample_cols: List[str], **kwargs):
+        sample_cols: List[str], **kwargs) -> dict:
     payload = deepcopy(curtain_base_payload)
     with open(de_file, "rt") as f, open(raw_file, "rt") as f2:
         payload["processed"] = f.read()
@@ -202,5 +205,38 @@ def create_curtain_session(
     if len(payload["differentialForm"]["_comparisonSelect"]) == 0:
         payload["differentialForm"]["_comparisonSelect"] = ["1"]
 
+    assert len(sample_cols) > 0
+    conditions = []
+    color_position = 0
+    sample_map = {}
+    color_map = {}
+    for i in sample_cols:
+        name_array = i.split(".")
+        replicate = name_array[-1]
+        condition = ".".join(name_array[:-1])
+        if condition not in conditions:
+            conditions.append(condition)
+            if color_position >= len(payload["settings"]["defaultColorList"]):
+                color_position = 0
+            color_map[condition] = payload["settings"]["defaultColorList"][color_position]
+            color_position += 1
+        if condition not in payload["settings"]["sampleOrder"]:
+            payload["settings"]["sampleOrder"][condition] = []
+        if i not in payload["settings"]["sampleOrder"][condition]:
+            payload["settings"]["sampleOrder"][condition].append(i)
+        if i not in payload["settings"]["sampleVisible"]:
+            payload["settings"]["sampleVisible"][i] = True
+
+        sample_map[i] = {"condition": condition, "replicate": replicate, "name": i}
+    payload["settings"]["sampleMap"] = sample_map
+    payload["settings"]["colorMap"] = color_map
+    payload["settings"]["conditionOrder"] = conditions
+
+    return payload
 
 
+def post_curtain_session(payload: dict, file: dict, url: str, **kwargs) -> dict:
+    #headers = {'Content-Type': 'multipart/form-data', 'Accept': 'application/json'}
+    file = {'file': ('curtain-settings.json', json.dumps(file))}
+    r = requests.post(url, data=payload, files=file)
+    return r
