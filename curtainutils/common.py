@@ -1,6 +1,7 @@
 from typing import List
 
 import pandas as pd
+from copy import deepcopy
 from uniprotparser.betaparser import UniprotSequence
 
 curtain_base_de_form = {
@@ -53,8 +54,8 @@ curtain_base_project_form = {
 
 curtain_base_payload = {
     "raw": "",
-    "rawForm": {},
-    "differentialForm": {},
+    "rawForm": curtain_base_raw_form,
+    "differentialForm": curtain_base_de_form,
     "processed": "",
     "password": "",
     "selections": [],
@@ -161,5 +162,45 @@ def read_fasta(fasta_file: str) -> pd.DataFrame:
                 fasta_dict[current_acc] += line.strip()
     return pd.DataFrame([[k, fasta_dict[k]] for k in fasta_dict], columns=["Entry", "Sequence"])
 
-def create_curtain_session(de_file: str, raw_file: str, fc_col: str, p_col: str, comp_col: str, comp_select: List[str], primary_id_de_col: str, primary_id_raw_col:str, sample_cols: List[str]):
-    pass
+def create_curtain_session(
+        de_file: str,
+        raw_file: str,
+        fc_col: str,
+        transform_fc: bool,
+        transform_significant: bool,
+        reverse_fc: bool,
+        p_col: str,
+        comp_col: str,
+        comp_select: List[str],
+        primary_id_de_col: str,
+        primary_id_raw_col:str,
+        sample_cols: List[str], **kwargs):
+    payload = deepcopy(curtain_base_payload)
+    with open(de_file, "rt") as f, open(raw_file, "rt") as f2:
+        payload["processed"] = f.read()
+        payload["raw"] = f2.read()
+
+    payload["differentialForm"]["_foldChange"] = fc_col
+    payload["differentialForm"]["_significant"] = p_col
+    payload["differentialForm"]["_comparison"] = comp_col
+    payload["differentialForm"]["_comparisonSelect"] = comp_select
+    payload["differentialForm"]["_primaryIDs"] = primary_id_de_col
+    payload["rawForm"]["_primaryIDs"] = primary_id_raw_col
+    payload["rawForm"]["_samples"] = sample_cols
+
+    assert type(transform_fc) == bool
+    assert type(transform_significant) == bool
+    assert type(reverse_fc) == bool
+
+    payload["differentialForm"]["_transformFC"] = transform_fc
+    payload["differentialForm"]["_transformSignificant"] = transform_significant
+    payload["differentialForm"]["_reverseFoldChange"] = reverse_fc
+
+    if payload["differentialForm"]["_comparison"] == "":
+        payload["differentialForm"]["_comparison"] = "CurtainSetComparison"
+
+    if len(payload["differentialForm"]["_comparisonSelect"]) == 0:
+        payload["differentialForm"]["_comparisonSelect"] = ["1"]
+
+
+
