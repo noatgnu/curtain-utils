@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "curtainutils"
-version = "0.1.1"
+version = "0.1.2"
 description = "A utility package that can be used to upload data to a curtain backend server."
 authors = ["Toan Phung <toan.phung@proteo.info>"]
 readme = "README.md"
@@ -15,6 +15,7 @@ requests = "^2.31.0"
 
 [tool.poetry.scripts]
 msf-curtainptm = "curtainutils.msfragger:main"
+spn-curtainptm = "curtainutils.spectronaut:main"
 
 [build-system]
 requires = ["poetry-core"]

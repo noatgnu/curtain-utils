@@ -29,6 +29,22 @@ def lambda_function_for_msfragger_ptm_single_site(row: pd.Series, index_col: str
                 if peptide_position >= -1:
                     position_in_peptide = position - peptide_position
                     row["Variant"] = row2["Entry"]
+                    sequence_window = ""
+                    if row["Position"] - 1 - 10 >= 0:
+                        sequence_window += seq[row["Position"] - 1 - 10:row["Position"] - 1]
+                    else:
+                        sequence_window += seq[:row["Position"] - 1]
+                        if len(sequence_window) < 10:
+                            sequence_window = "_" * (10 - len(sequence_window)) + sequence_window
+                    sequence_window += seq[row["Position"] - 1]
+                    if row["Position"] + 10 <= len(seq):
+                        sequence_window += seq[row["Position"]:row["Position"] + 10]
+                    else:
+                        sequence_window += seq[row["Position"]:]
+                        if len(sequence_window) < 21:
+                            sequence_window += "_" * (21 - len(sequence_window))
+
+                    row["Sequence.window"] = sequence_window
                     break
         row["Position"] = position
         row["Residue"] = residue
