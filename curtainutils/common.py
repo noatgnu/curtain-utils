@@ -1,8 +1,8 @@
 from typing import List
+
 import requests
 import pandas as pd
 import json
-import io
 from copy import deepcopy
 from uniprotparser.betaparser import UniprotSequence
 
@@ -149,8 +149,10 @@ def read_fasta(fasta_file: str) -> pd.DataFrame:
     fasta_dict = {}
     with open(fasta_file, 'r') as f:
         current_acc = ""
+        count = 0
         for line in f:
             if line.startswith('>'):
+                count += 1
                 acc = UniprotSequence(line.strip(), True)
 
                 if acc.accession:
@@ -162,6 +164,8 @@ def read_fasta(fasta_file: str) -> pd.DataFrame:
 
             else:
                 fasta_dict[current_acc] += line.strip()
+
+
     return pd.DataFrame([[k, fasta_dict[k]] for k in fasta_dict], columns=["Entry", "Sequence"])
 
 
