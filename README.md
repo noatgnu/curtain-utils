@@ -15,7 +15,9 @@ msf-curtainptm -f <MSFragger PTM single site output file> -i <index column with 
 ## Submit data to a Curtain server
 
 Usage example:
+
 ```python
+from curtainutils.client import CurtainClient
 import curtainutils.common as common
 
 de_file = r"differential-file-path"
@@ -27,15 +29,17 @@ transform_significant = False
 reverse_fc = False
 p_col = "significance-column-name"
 
-comp_col = "" # Leave empty if no comparison column is used
-comp_select = [] # Leave empty if no comparison column is used
+comp_col = ""  # Leave empty if no comparison column is used
+comp_select = []  # Leave empty if no comparison column is used
 
 primary_id_de_col = "primary-id-column-name-in-differential-file"
 primary_id_raw_col = "primary-id-column-name-in-raw-file"
 
-sample_cols = ["4Hr-AGB1.01", "4Hr-AGB1.02", "4Hr-AGB1.03", "4Hr-AGB1.04", "4Hr-AGB1.05", "24Hr-AGB1.01", "24Hr-AGB1.02", "24Hr-AGB1.03", "24Hr-AGB1.04", "24Hr-AGB1.05", "4Hr-Cis.01", "4Hr-Cis.02", "4Hr-Cis.03", "24Hr-Cis.01", "24Hr-Cis.02", "24Hr-Cis.03"]
-
-payload = common.create_curtain_session_payload(
+sample_cols = ["4Hr-AGB1.01", "4Hr-AGB1.02", "4Hr-AGB1.03", "4Hr-AGB1.04", "4Hr-AGB1.05", "24Hr-AGB1.01",
+               "24Hr-AGB1.02", "24Hr-AGB1.03", "24Hr-AGB1.04", "24Hr-AGB1.05", "4Hr-Cis.01", "4Hr-Cis.02", "4Hr-Cis.03",
+               "24Hr-Cis.01", "24Hr-Cis.02", "24Hr-Cis.03"]
+c = CurtainClient("curtain-backend-url")
+payload = c.create_curtain_session_payload(
     de_file,
     raw_file,
     fc_col,
@@ -56,6 +60,6 @@ package = {
     "curtain_type": "TP",
 }
 
-result = common.post_curtain_session(package, payload, "back-end-url")
+result = c.post_curtain_session(package, payload)
 print(result)
 ```
