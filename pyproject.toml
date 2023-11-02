@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "curtainutils"
-version = "0.1.5"
+version = "0.1.6"
 description = "A utility package that can be used to upload data to a curtain backend server."
 authors = ["Toan Phung <toan.phung@proteo.info>"]
 readme = "README.md"

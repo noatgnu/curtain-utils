@@ -77,8 +77,9 @@ class CurtainClient:
             comp_col: str,
             comp_select: List[str],
             primary_id_de_col: str,
-            primary_id_raw_col:str,
+            primary_id_raw_col: str,
             sample_cols: List[str], **kwargs) -> dict:
+        """Create payload for curtain session"""
         payload = deepcopy(curtain_base_payload)
         with open(de_file, "rt") as f, open(raw_file, "rt") as f2:
             payload["processed"] = f.read()
@@ -243,4 +244,35 @@ class CurtainClient:
             return self.create_curtain_session_payload(de_file, raw_file, fc_col, transform_fc, transform_significant, reverse_fc, p_col, comp_col, comp_select, primary_id_de_col, primary_id_raw_col, sample_cols, **kwargs)
         else:
             return self.create_curtain_ptm_session_payload(de_file, raw_file, fc_col, transform_fc, transform_significant, reverse_fc, p_col, comp_col, comp_select, primary_id_de_col, primary_id_raw_col, sample_cols, peptide_col, acc_col, position_col, position_in_peptide_col, sequence_window_col, score_col, **kwargs)
+
+
+def parse_curtain_from_json(json_path: str):
+    with open(json_path, "rt") as f:
+        data = json.load(f)
+    if type(data["settings"]) == str:
+        data["settings"] = json.loads(data["settings"])
+    print(data["settings"])
+    if "version" in data["settings"]:
+        if data["settings"]["version"] == "2":
+            pass
+    else:
+        return parse_old_version(data)
+
+    return data
+
+def parse_old_version(json_data: dict):
+    if "colormap" not in json_data["settings"]:
+        json_data["settings"]["colormap"] = {}
+    if "pCutoff" not in json_data["settings"]:
+        json_data["settings"]["pCutoff"] = 0.05
+    if "log2FCCutoff" not in json_data["settings"]:
+        json_data["settings"]["log2FCCutoff"] = 0.6
+    if "dataColumns" in json_data["settings"]:
+        json_data["settings"]["dataColumns"] = json_data["settings"]["dataColumns"].split(",")
+
+    json_data["settings"]["pCutoff"] = 0.05
+    pass
+
+def parse_v2(json_data: dict):
+    pass
 
