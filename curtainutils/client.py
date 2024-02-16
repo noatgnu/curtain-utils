@@ -11,12 +11,42 @@ from curtainutils.common import curtain_base_payload
 
 
 class CurtainClient:
-    def __init__(self, base_url: str):
+    def __init__(self, base_url: str, api_key: str = ""):
         self.base_url = base_url
+        self.request_session = requests.Session()
+        self.refresh_token = ""
+        self.access_token = ""
+        self.api_key = api_key
+
+    def get_data_filter_list(self):
+        if self.api_key != "":
+            r = requests.get(f"{self.base_url}/data_filter_list/", headers={"X-Api-Key": self.api_key})
+        else:
+            r = requests.get(f"{self.base_url}/data_filter_list/")
+        if r.status_code == 200:
+            res = r.json()
+            yield res["results"]
+            if res['next']:
+                while res['next']:
+                    if self.api_key != "":
+                        r = requests.get(res['next'], headers={"X-Api-Key": self.api_key})
+                    else:
+                        r = requests.get(res['next'])
+                    if r.status_code == 200:
+                        res = r.json()
+                        yield res["results"]
+                    else:
+                        raise ValueError(r.text)
+
+        else:
+            raise ValueError(r.text)
 
     def post_curtain_session(self, payload: dict, file: dict, **kwargs) -> str:
         file = {'file': ('curtain-settings.json', json.dumps(file))}
-        r = requests.post(f"{self.base_url}/curtain/", data=payload, files=file)
+        if self.api_key != "":
+            r = requests.post(f"{self.base_url}/curtain/", data=payload, files=file, headers={"X-Api-Key": self.api_key})
+        else:
+            r = requests.post(f"{self.base_url}/curtain/", data=payload, files=file)
         if r.status_code == 200:
             return r.json()["link_id"]
         else:
@@ -245,6 +275,18 @@ class CurtainClient:
         else:
             return self.create_curtain_ptm_session_payload(de_file, raw_file, fc_col, transform_fc, transform_significant, reverse_fc, p_col, comp_col, comp_select, primary_id_de_col, primary_id_raw_col, sample_cols, peptide_col, acc_col, position_col, position_in_peptide_col, sequence_window_col, score_col, **kwargs)
 
+    def retrieve_curtain_session(self, link_id: str, token: str = ""):
+        req = self.request_session.get(f"{self.base_url}/curtain/{link_id}/download/token={token}/")
+        if req.status_code == 200:
+            res = req.json()
+            if "url" in res:
+                data_req = self.request_session.get(res["url"])
+                if data_req.status_code == 200:
+                    return data_req.json()
+            else:
+                return res
+        else:
+            raise ValueError(req.text)
 
 def parse_curtain_from_json(json_path: str):
     with open(json_path, "rt") as f:

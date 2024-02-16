@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "curtainutils"
-version = "0.1.6"
+version = "0.1.14"
 description = "A utility package that can be used to upload data to a curtain backend server."
 authors = ["Toan Phung <toan.phung@proteo.info>"]
 readme = "README.md"
@@ -12,8 +12,9 @@ uniprotparser = "^1.1.0"
 click = "^8.1.7"
 pandas = "^2.1.0"
 requests = "^2.31.0"
-seaborn = "^0.12.2"
+seaborn = "^0.13.1"
 sequal = "^1.0.2"
+cryptography = "^41.0.5"
 
 [tool.poetry.scripts]
 msf-curtainptm = "curtainutils.msfragger:main"

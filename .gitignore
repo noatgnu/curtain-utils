@@ -93,3 +93,6 @@ fabric.properties
 
 dist
 */__pycache__
+*.txt
+*.svg
+*.pdf

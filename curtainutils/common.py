@@ -1,5 +1,15 @@
+import os.path
+
 import pandas as pd
 from uniprotparser.betaparser import UniprotSequence
+import base64
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.padding import PKCS7
 
 curtain_ptm_de_form = {
     "_reverseFoldChange": False,
@@ -259,3 +269,62 @@ def read_fasta(fasta_file: str) -> pd.DataFrame:
 
 
     return pd.DataFrame([[k, fasta_dict[k]] for k in fasta_dict], columns=["Entry", "Sequence"])
+
+def create_ptm_db(input_file: str, uniprot_acc_col: str, peptide_seq_col: str = "", peptide_pos_col: str = "", modified_residue_is_lower_case: bool = False, output_file: str = "", peptide_start_col: str = "", parse_fasta: bool = False, fasta_file: str = ""):
+    df = pd.read_csv(input_file, sep="\t")
+
+    if modified_residue_is_lower_case:
+        # parse position of modified residue from peptide sequence column by detecting lower case letter
+        df["Position"] = df[peptide_seq_col].apply(lambda x: x.index([i for i in x if i.islower()][0]) + 1)
+        if peptide_start_col != "":
+            df["Position"] += df[peptide_start_col] - 1
+        else:
+            parse_fasta = True
+
+    return df
+
+def generate_RSA_key_pair(folder_path: str = "."):
+    private_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048,
+        backend=default_backend()
+    )
+    public_key = private_key.public_key()
+    private_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption()
+    )
+
+    with open(os.path.join(folder_path, 'private_key.pem'), 'wb') as f:
+        f.write(private_pem)
+
+    public_pem = public_key.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+    with open(os.path.join(folder_path, 'public_key.pem'), 'wb') as f:
+        f.write(public_pem)
+
+# a function to generate a aes key and encrypt it with an RSA public key
+def encrypt_AES_key(aes_key: bytes, public_key: str) -> bytes:
+    public_key = serialization.load_pem_public_key(
+        public_key,
+        backend=default_backend()
+    )
+    encrypted = public_key.encrypt(
+        aes_key,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None)
+    )
+    return encrypted
+
+# a function to encrypt a large string with an AES key in CTR mode and return the encrypted string and the initialization vector
+def encrypt_AES_string(aes_key: bytes, string: str) -> (bytes, bytes):
+    iv = os.urandom(16)
+    cipher = Cipher(algorithms.AES(aes_key), modes.CTR(iv), backend=default_backend())
+    encryptor = cipher.encryptor()
+    ct = encryptor.update(string.encode("utf-8")) + encryptor.finalize()
+    return ct, iv
