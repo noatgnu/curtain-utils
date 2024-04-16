@@ -59,9 +59,8 @@ def lambda_function_for_diann_ptm_single_site(row: pd.Series, modified_seq_col: 
                         break
     return row
 
-def process_diann_ptm(pr_file_path: str, report_file_path: str, output_file: str, modification_of_interests: str = "UniMod:21", columns: str = "accession,id,sequence,protein_name", fasta_file: str = None):
+def process_diann_ptm(pr_file_path: str, report_file_path: str, output_file: str, modification_of_interests: str = "UniMod:21", columns: str = "accession,id,sequence,protein_name", fasta_file: str = None, localization_score_col: str = "PTM.Site.Confidence", output_meta=False):
     df = pd.read_csv(pr_file_path, sep="\t")
-    localization_score_col = "PTM.Site.Confidence"
     modified_seq_col = "Modified.Sequence"
     index_col = "Precursor.Id"
     pr_file_col = "File.Name"
@@ -89,8 +88,18 @@ def process_diann_ptm(pr_file_path: str, report_file_path: str, output_file: str
             highest_score = g[localization_score_col].max()
             df.loc[i, localization_score_col] = highest_score
     df.reset_index(inplace=True)
+    df["Position"] = df["Position"] + 1
+    df["Position.in.peptide"] = df["Position.in.peptide"] + 1
     df.to_csv(output_file, sep="\t",
               index=False)
+    if output_meta:
+        for i, g in df_meta.groupby(index_col):
+            result = df[df[index_col] == i]
+            if not result.empty:
+                for i2, r in g.iterrows():
+                    df_meta.loc[i2, "Intensity"] = result.iloc[0][r[pr_file_col]]
+        df_meta.to_csv(output_file.replace(".tsv", "_meta.tsv"), sep="\t", index=False)
+
 
 @click.command()
 @click.option("--pr_file_path", "-p", help="Path to the PR file to be processed")
