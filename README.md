@@ -1,34 +1,58 @@
 # CurtainUtils
-A utility package for converting different MS output files into a format usable by Curtain (https://curtain.proteo.info) and CurtainPTM (https://curtainptm.proteo.info)
+
+A utility package for converting different MS output files into a format usable by Curtain (https://curtain.proteo.info) and CurtainPTM (https://curtainptm.proteo.info).
+
+## Table of Contents
+
+- [Installation](#installation)
+- [Usage](#usage)
+  - [Convert MSFragger PTM single site output to CurtainPTM input](#convert-msfragger-ptm-single-site-output-to-curtainptm-input)
+  - [Convert DIA-NN PTM output to CurtainPTM input](#convert-dia-nn-ptm-output-to-curtainptm-input)
+  - [Convert Spectronaut output to Curtain input](#convert-spectronaut-output-to-curtain-input)
+  - [Submit data to a Curtain server](#submit-data-to-a-curtain-server)
+  - [Submit data to a CurtainPTM server](#submit-data-to-a-curtainptm-server)
+- [License](#license)
 
 ## Installation
-The package can be installed using the following command.
-`pip install curtainutils`
 
-## Convert MSFragger PTM single site output to CurtainPTM input
-This script should be used to convert a differential analysis file that contains the index column and peptide column. The index column should also be the original index column output by MS-Fragger that contains both the Accession ID as well as position of the PTM within the protein sequence.
+The package can be installed using the following command:
 
-Usage:
 ```bash
-msf-curtainptm -f <MSFragger PTM single site output file> -i <index column with site information> -o <output file> -p <peptide column> -a <fasta file> 
+pip install curtainutils
 ```
 
-## Convert DIA-NN PTM output to CurtainPTM input
-This script should be used to convert a differential analysis file that contains the following column "Modified.Sequence", "Precursor.Id", "Protein.Group" from the pr report file by combining the file with the Report file which contains the column "PTM.Site.Confidence".
+### Prerequisites
+
+- Python 3.6 or higher
+- `pip` package manager
+
+## Usage
+
+### Convert MSFragger PTM single site output to CurtainPTM input
+
+This script should be used to convert a differential analysis file that contains the index column and peptide column. The index column should also be the original index column output by MS-Fragger that contains both the Accession ID as well as the position of the PTM within the protein sequence.
+
+```bash
+msf-curtainptm -f <MSFragger PTM single site output file> -i <index column with site information> -o <output file> -p <peptide column> -a <fasta file>
+```
+
+### Convert DIA-NN PTM output to CurtainPTM input
+
+This script should be used to convert a differential analysis file that contains the following columns: "Modified.Sequence", "Precursor.Id", "Protein.Group" from the pr report file by combining the file with the Report file which contains the column "PTM.Site.Confidence".
 
 ```bash
 diann-curtainptm -p <differential analysis file> -r <report file> -o <output file> -m <modification_of_interests from the Modified.Sequence column>
 ```
 
-## Convert Spectronaut output to Curtain input
+### Convert Spectronaut output to Curtain input
+
 This script should be used to convert a differential analysis file that contains the "PTM_collapse_key" and "PEP.StrippedSequence" columns from the original Spectronaut output.
 
 ```bash
 spn-curtainptm -f <differential analysis file> -o <output file>
 ```
 
-## Submit data to a Curtain server
-Usage example:
+### Submit data to a Curtain server
 
 ```python
 from curtainutils.client import CurtainClient
@@ -77,7 +101,8 @@ result = c.post_curtain_session(package, payload)
 print(result)
 ```
 
-## Submit data to a CurtainPTM server
+### Submit data to a CurtainPTM server
+
 ```python
 from curtainutils.client import CurtainClient
 
@@ -131,4 +156,9 @@ package = {
 }
 
 result = c.post_curtain_session(package, payload)
+print(result)
 ```
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

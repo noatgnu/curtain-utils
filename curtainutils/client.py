@@ -10,6 +10,45 @@ from matplotlib import pyplot as plt
 from curtainutils.common import curtain_base_payload
 
 
+class CurtainUniprotData:
+    def __init__(self, uniprot):
+        self.accMap = {i[0]: i[1] for i in uniprot["accMap"]["value"]}
+        self.dataMap = {i[0]: i[1] for i in uniprot["dataMap"]["value"]}
+        self.db = self._db_to_df(uniprot["db"])
+        if "organism" in uniprot:
+            self.organism = uniprot["organism"]
+        else:
+            self.organism = None
+        if "geneNameToAcc" in uniprot:
+            self.geneNameToAcc = uniprot["geneNameToAcc"]
+        else:
+            self.geneNameToAcc = {}
+        if "geneNameToPrimary" in uniprot:
+            self.geneNameToPrimary = uniprot["geneNameToPrimary"]
+        else:
+            self.geneNameToPrimary = {}
+        self.results = uniprot["results"]
+
+    def _db_to_df(self, db: dict):
+        data = []
+        for i in db["value"]:
+            data.append(i[1])
+        return pd.DataFrame(data)
+
+    def get_uniprot_data_from_pi(self, primary_id: str) -> pd.Series | None:
+        if primary_id in self.accMap:
+            acc_match_list = self.accMap[primary_id]
+            if acc_match_list:
+                if type(acc_match_list) == str:
+                    acc_match_list = [acc_match_list]
+                for acc in acc_match_list:
+                    if acc in self.dataMap:
+                        ac = self.dataMap[acc]
+                        filter_db = self.db[self.db["From"] == ac]
+                        if not filter_db.empty:
+                            return filter_db.iloc[0]
+        return None
+
 class CurtainClient:
     def __init__(self, base_url: str, api_key: str = ""):
         self.base_url = base_url
@@ -74,7 +113,8 @@ class CurtainClient:
         plt.show()
 
     def download_curtain_session(self, link_id: str):
-        req = requests.get(f"{self.base_url}/curtain/{link_id}/download/?token=/")
+        link = f"{self.base_url}/curtain/{link_id}/download/token=/"
+        req = requests.get(link)
         if req.status_code == 200:
             data = req.json()
             if "url" in data:
