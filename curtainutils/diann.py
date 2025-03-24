@@ -21,8 +21,21 @@ def lambda_function_for_diann_ptm_single_site(row: pd.Series, modified_seq_col: 
     Returns:
         pd.Series: The processed row with additional fields.
     """
-    seq = Sequence(row[modified_seq_col])
-    stripped_seq = seq.to_stripped_string()
+    if row[modified_seq_col].startswith("("):
+        row[modified_seq_col] = "_" + row[modified_seq_col]
+        seq = Sequence(row[modified_seq_col])
+        seq = seq[1:]
+        seq2 = ""
+        for i in seq:
+            if i.mods:
+                seq2 += i.value + "(" + i.mods[0].value + ")"
+            else:
+                seq2 += i.value
+        seq = Sequence(seq2)
+        stripped_seq = seq.to_stripped_string()
+    else:
+        seq = Sequence(row[modified_seq_col])
+        stripped_seq = seq.to_stripped_string()
     entry = row[entry_col]
     print(f"Processing {row[modified_seq_col]}, {entry}")
 
@@ -41,9 +54,27 @@ def lambda_function_for_diann_ptm_single_site(row: pd.Series, modified_seq_col: 
                         try:
                             peptide_position = protein_seq.index(peptide_seq)
                         except ValueError:
-                            peptide_position = protein_seq.replace("I", "L").index(peptide_seq.replace("I", "L"))
-                            row["Comment"] = "I replaced by L"
+                            try:
+                                peptide_position = protein_seq.replace("I", "L").index(peptide_seq.replace("I", "L"))
+                                row["Comment"] = "I replaced by L"
+                            except ValueError:
+                                print("Error", entry, peptide_seq)
 
+                                continue
+                                #for _, variant in variants.iterrows():
+                                #    if "Sequence" in variant:
+                                #        seq = variant["Sequence"]
+                                #        try:
+                                #            peptide_position = seq.index(peptide_seq)
+                                #        except ValueError:
+                                #            try:
+                                #                peptide_position = seq.replace("I", "L").index(
+                                #                    peptide_seq.replace("I", "L"))
+                                #                row["Comment"] = "I replaced by L"
+                                #            except ValueError:
+                                #                continue
+                                #        if peptide_position >= 0:
+                                #            break
                         if peptide_position >= 0:
                             position_in_protein = i.position + peptide_position
                             row["Position"] = position_in_protein
@@ -171,8 +202,11 @@ def process_diann_ptm(pr_file_path: str, report_file_path: str, output_file: str
             fasta_df = fasta_df[0]
         else:
             fasta_df = pd.concat(fasta_df, ignore_index=True)
-
+    print(fasta_df)
+    print(df)
     # Apply the lambda function to process each row
+
+
     df = df.apply(lambda x: lambda_function_for_diann_ptm_single_site(x, modified_seq_col, "parse_id", fasta_df,
                                                                       modification_of_interests), axis=1)
 
@@ -212,8 +246,9 @@ def process_diann_ptm(pr_file_path: str, report_file_path: str, output_file: str
 @click.option("--modification_of_interests", "-m", help="Modification of interests", default="UniMod:21")
 @click.option("--columns", "-c", help="UniProt data columns to be included", default="accession,id,sequence,protein_name")
 @click.option("--fasta_file", "-f", help="Path to the fasta file", default=None)
-def main(pr_file_path: str, report_file_path: str, output_file: str, modification_of_interests: str, columns: str, fasta_file: str):
-    process_diann_ptm(pr_file_path, report_file_path, output_file, modification_of_interests, columns=columns, fasta_file=fasta_file)
+@click.option("--site_confidence_col", "-s", help="Column name for site confidence", default="PTM.Site.Confidence")
+def main(pr_file_path: str, report_file_path: str, output_file: str, modification_of_interests: str, columns: str, fasta_file: str, site_confidence_col: str):
+    process_diann_ptm(pr_file_path, report_file_path, output_file, modification_of_interests, columns=columns, fasta_file=fasta_file, localization_score_col=site_confidence_col)
 
 
 if __name__ == '__main__':
