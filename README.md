@@ -1,164 +1,138 @@
 # CurtainUtils
 
-A utility package for converting different MS output files into a format usable by Curtain (https://curtain.proteo.info) and CurtainPTM (https://curtainptm.proteo.info).
+A utility package for preprocessing and uploading processed and analyzed mass spectrometry-based proteomics data to [Curtain](https://curtain.proteo.info) and [CurtainPTM](https://curtainptm.proteo.info) visualization platforms.
 
-## Table of Contents
+> **What is Curtain?** Curtain is a web-based visualization tool for proteomics data that allows interactive exploration of protein expression data.
 
-- [Installation](#installation)
-- [Usage](#usage)
-  - [Convert MSFragger PTM single site output to CurtainPTM input](#convert-msfragger-ptm-single-site-output-to-curtainptm-input)
-  - [Convert DIA-NN PTM output to CurtainPTM input](#convert-dia-nn-ptm-output-to-curtainptm-input)
-  - [Convert Spectronaut output to Curtain input](#convert-spectronaut-output-to-curtain-input)
-  - [Submit data to a Curtain server](#submit-data-to-a-curtain-server)
-  - [Submit data to a CurtainPTM server](#submit-data-to-a-curtainptm-server)
-- [License](#license)
+> **What is CurtainPTM?** CurtainPTM extends Curtain's functionality to visualize post-translational modifications (PTMs) in proteomics data.
 
 ## Installation
 
-The package can be installed using the following command:
+### Requirements
+
+- Python 3.6 or higher
+- pip package manager
+
+### Install from PyPI
 
 ```bash
 pip install curtainutils
 ```
 
-### Prerequisites
-
-- Python 3.6 or higher
-- `pip` package manager
-
-## Usage
-
-### Convert MSFragger PTM single site output to CurtainPTM input
-
-This script should be used to convert a differential analysis file that contains the index column and peptide column. The index column should also be the original index column output by MS-Fragger that contains both the Accession ID as well as the position of the PTM within the protein sequence.
+### Install from source
 
 ```bash
-msf-curtainptm -f <MSFragger PTM single site output file> -i <index column with site information> -o <output file> -p <peptide column> -a <fasta file>
+pip install git+https:///github.com/noatgnu/curtainutils.git
 ```
 
-### Convert DIA-NN PTM output to CurtainPTM input
+## Conversion to CurtainPTM upload format
 
-This script should be used to convert a differential analysis file that contains the following columns: "Modified.Sequence", "Precursor.Id", "Protein.Group" from the pr report file by combining the file with the Report file which contains the column "PTM.Site.Confidence".
+### Convert MSFragger PTM single site output
 
-```bash
-diann-curtainptm -p <differential analysis file> -r <report file> -o <output file> -m <modification_of_interests from the Modified.Sequence column>
+```Bash
+msf-curtainptm -f msfragger_output.txt -i "Index" -o curtainptm_input.txt -p "Peptide" -a proteome.fasta
 ```
 
-### Convert Spectronaut output to Curtain input
+<table>
+<tr><td>Parameter</td><td>Description</td></tr>
+<tr><td>-f</td><td>MSFragger PTM output file containing differential analysis</td></tr>
+<tr><td>-i</td><td>Column name containing site information (with accession ID and PTM position)</td></tr>
+<tr><td>-o</td><td>Output file name for CurtainPTM format</td></tr>
+<tr><td>-p</td><td>Column name containing peptide sequences</td></tr>
+<tr><td>-a</td><td>FASTA file for protein sequence reference</td></tr>
+</table>
 
-This script should be used to convert a differential analysis file that contains the "PTM_collapse_key" and "PEP.StrippedSequence" columns from the original Spectronaut output.
+### Convert DIA-NN PTM output
 
-```bash
-spn-curtainptm -f <differential analysis file> -o <output file>
+```Bash
+diann-curtainptm -p diann_differential.txt -r diann_report.txt -o curtainptm_input.txt -m "Phospho"
 ```
 
-### Submit data to a Curtain server
+<table>
+<tr><td>Parameter</td><td>Description</td></tr>
+<tr><td>-p</td><td>Differential analysis file containing Modified.Sequence, Precursor.Id, Protein.Group</td></tr>
+<tr><td>-r</td><td>DIA-NN report file containing protein sequences</td></tr>
+<tr><td>-o</td><td>Output file name for CurtainPTM format</td></tr>
+<tr><td>-m</td><td>Modification type (e.g., Phospho, Acetyl, Methyl, etc.)</td></tr>
+</table>
 
-```python
-from curtainutils.client import CurtainClient
+### Convert Spectronaut output
 
-de_file = r"differential-file-path"
-raw_file = r"raw-file-path"
+```Bash
+spn-curtainptm -f spectronaut_data.txt -o curtain_input.txt
+```
 
-fc_col = "foldchange-column-name"
-transform_fc = False
-transform_significant = False
-reverse_fc = False
-p_col = "significance-column-name"
+<table>
+<tr><td>Parameter</td><td>Description</td></tr>
+<tr><td>-f</td><td>Spectronaut output file containing differential analysis</td></tr>
+<tr><td>-o</td><td>Output file name for CurtainPTM format</td></tr>
+</table>
 
-comp_col = ""  # Leave empty if no comparison column is used
-comp_select = []  # Leave empty if no comparison column is used
+## API Intergration
 
-primary_id_de_col = "primary-id-column-name-in-differential-file"
-primary_id_raw_col = "primary-id-column-name-in-raw-file"
+### Upload to Curtain backend
 
-sample_cols = ["4Hr-AGB1.01", "4Hr-AGB1.02", "4Hr-AGB1.03", "4Hr-AGB1.04", "4Hr-AGB1.05", "24Hr-AGB1.01",
-               "24Hr-AGB1.02", "24Hr-AGB1.03", "24Hr-AGB1.04", "24Hr-AGB1.05", "4Hr-Cis.01", "4Hr-Cis.02", "4Hr-Cis.03",
-               "24Hr-Cis.01", "24Hr-Cis.02", "24Hr-Cis.03"]
-c = CurtainClient("curtain-backend-url")
-payload = c.create_curtain_session_payload(
-    de_file,
-    raw_file,
-    fc_col,
-    transform_fc,
-    transform_significant,
-    reverse_fc,
-    p_col,
-    comp_col,
-    comp_select,
-    primary_id_de_col,
-    primary_id_raw_col,
-    sample_cols
+```py
+from curtainutils.client import CurtainClient, add_imputation_map, create_imputation_map, add_uniprot_data
+
+# Initialize client
+client = CurtainClient("https://your-curtain-server.com") # Optional api_key parameters
+
+# Define parameters
+de_file = "differential_data.txt"
+raw_file = "raw_data.txt"
+fc_col = "log2FC"
+p_col = "p_value"
+primary_id_de_col = "Protein"
+primary_id_raw_col = "Protein"
+sample_cols = ["Sample1.1", "Sample1.2", "Sample1.3", "Sample2.1", "Sample2.2", "Sample2.3"]
+description = "My protein analysis"
+# Create payload
+payload = client.create_curtain_session_payload(
+    de_file=de_file,
+    raw_file=raw_file,
+    fc_col=fc_col,
+    transform_fc=False,  # Set to True if fold change needs log transformation
+    transform_significant=False,  # Set to True if p-values need -log10 transformation
+    reverse_fc=False,  # Set to True to reverse fold change direction
+    p_col=p_col,
+    comp_col="",  # Optional comparison column
+    comp_select=[],  # Optional comparison values to select
+    primary_id_de_col=primary_id_de_col,
+    primary_id_raw_col=primary_id_raw_col,
+    sample_cols=sample_cols,
+    description=description
 )
 
+# Optional: Add uniprot data
+add_uniprot_data(payload, raw_file)
+
+# Optional: Add imputation map
+imputation_file = "imputed_data.txt" 
+imputation_map = create_imputation_map(imputation_file, primary_id_raw_col, sample_cols)
+add_imputation_map(payload, imputation_map)
+
+# Submit to server
 package = {
     "enable": "True",
-    "description": payload["settings"]["description"],
+    "description": description,
     "curtain_type": "TP",
+  "permanent": "False",
 }
-
-result = c.post_curtain_session(package, payload)
-print(result)
+link_id = client.post_curtain_session(package, payload)
+print(f"Access your visualization at: https:/frontend/#/{link_id}")
 ```
 
-### Submit data to a CurtainPTM server
+### Common API payload creation parameters
 
-```python
-from curtainutils.client import CurtainClient
-
-de_file = r"differential-file-path"
-raw_file = r"raw-file-path"
-
-fc_col = "foldchange-column-name"
-transform_fc = False
-transform_significant = False
-reverse_fc = False
-p_col = "significance-column-name"
-comp_col = ""  # Leave empty if no comparison column is used
-comp_select = []  # Leave empty if no comparison column is used
-primary_id_de_col = "primary-id-column-name-in-differential-file"
-primary_id_raw_col = "primary-id-column-name-in-raw-file"
-sample_cols = []
-peptide_col = "peptide-sequence-column-name"
-acc_col = "protein-accession-column-name"
-position_col = "position-in-protein-column-name"
-position_in_peptide_col = "position-in-peptide-column-name"
-sequence_window_col = "sequence-window-column-name"
-score_col = "score-column-name"
-
-c = CurtainClient("curtain-backend-url")
-
-payload = c.create_curtain_ptm_session_payload(
-    de_file,
-    raw_file,
-    fc_col,
-    transform_fc,
-    transform_significant,
-    reverse_fc,
-    p_col,
-    comp_col,
-    comp_select,
-    primary_id_de_col,
-    primary_id_raw_col,
-    sample_cols,
-    peptide_col,
-    acc_col,
-    position_col,
-    position_in_peptide_col,
-    sequence_window_col,
-    score_col
-)
-
-package = {
-    "enable": "True",
-    "description": payload["settings"]["description"],
-    "curtain_type": "PTM",
-}
-
-result = c.post_curtain_session(package, payload)
-print(result)
-```
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+<table>
+<tr><td>Parameter</td><td>Description</td></tr>
+<tr><td>de_file</td><td>Path to differential expression file</td></tr>
+<tr><td>raw_file</td><td>Path to raw data file</td></tr>
+<tr><td>fc_col</td><td>Column name containing fold change values</td></tr>
+<tr><td>transform_fc</td><td>Whether fold change values need log transformation</td></tr>
+<tr><td>p_col</td><td>Column name containing significance/p-values</td></tr>
+<tr><td>primary_id_de_col</td><td>ID column name in differential expression file</td></tr>
+<tr><td>primary_id_raw_col</td><td>ID column name in raw data file</td></tr>
+<tr><td>sample_cols</td><td>List of column names containing sample data</td></tr>
+</table>
