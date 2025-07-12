@@ -1,25 +1,72 @@
 [tool.poetry]
 name = "curtainutils"
-version = "0.1.20"
+version = "0.1.21"
 description = "A utility package that can be used to upload data to a curtain backend server."
 authors = ["Toan Phung <toan.phung@proteo.info>"]
 readme = "README.md"
 license = "MIT"
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = ">=3.10,<4.0"
 uniprotparser = "^1.1.0"
-click = "^8.1.7"
-pandas = "^2.1.0"
-requests = "^2.31.0"
+click = "^8.2.1"
+pandas = "^2.3.1"
+requests = "^2.32.4"
 seaborn = "^0.13.1"
-sequal = "^2.0.3"
-cryptography = "^42.0.8"
+sequal = "^2.0.4"
+cryptography = "^45.0.5"
+tqdm = "^4.67.1"
+
+[tool.poetry.group.dev.dependencies]
+flake8 = "^7.0.0"
+black = "^24.0.0"
+isort = "^5.13.0"
+mypy = "^1.8.0"
+pytest = "^8.0.0"
 
 [tool.poetry.scripts]
 msf-curtainptm = "curtainutils.msfragger:main"
 spn-curtainptm = "curtainutils.spectronaut:main"
 diann-curtainptm = "curtainutils.diann:main"
+
+[tool.black]
+line-length = 88
+target-version = ['py310']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["curtainutils"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
 
 [build-system]
 requires = ["poetry-core"]

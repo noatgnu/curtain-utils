@@ -10,7 +10,14 @@ import re
 # Regular expression to extract position and residue from the index column
 reg_positon_residue = re.compile("_(\w)(\d+)")
 
-def lambda_function_for_msfragger_ptm_single_site(row: pd.Series, index_col: str, peptide_col: str, fasta_df: pd.DataFrame, parse_from_peptide_col: bool = False) -> pd.Series:
+
+def lambda_function_for_msfragger_ptm_single_site(
+    row: pd.Series,
+    index_col: str,
+    peptide_col: str,
+    fasta_df: pd.DataFrame,
+    parse_from_peptide_col: bool = False,
+) -> pd.Series:
     """
     Process a row of MSFragger PTM single site data to extract and calculate various fields.
 
@@ -46,7 +53,9 @@ def lambda_function_for_msfragger_ptm_single_site(row: pd.Series, index_col: str
                             try:
                                 peptide_position = seq.index(peptide_seq)
                             except ValueError:
-                                peptide_position = seq.replace("I", "L").index(peptide_seq.replace("I", "L"))
+                                peptide_position = seq.replace("I", "L").index(
+                                    peptide_seq.replace("I", "L")
+                                )
                                 row["Comment"] = "I replaced by L"
 
                             if peptide_position >= 0:
@@ -57,11 +66,17 @@ def lambda_function_for_msfragger_ptm_single_site(row: pd.Series, index_col: str
 
                                 start = max(0, position - 11)
                                 end = min(len(seq), position + 10)
-                                sequence_window = seq[start:position - 1] + seq[position - 1] + seq[position:end]
+                                sequence_window = (
+                                    seq[start : position - 1]
+                                    + seq[position - 1]
+                                    + seq[position:end]
+                                )
 
                                 # Pad the sequence window if necessary
                                 if start == 0:
-                                    sequence_window = "_" * (10 - (position - 1)) + sequence_window
+                                    sequence_window = (
+                                        "_" * (10 - (position - 1)) + sequence_window
+                                    )
                                 if end == len(seq):
                                     sequence_window += "_" * (21 - len(sequence_window))
 
@@ -76,6 +91,7 @@ def lambda_function_for_msfragger_ptm_single_site(row: pd.Series, index_col: str
                             break
 
     return row
+
 
 # def lambda_function_for_msfragger_ptm_single_site(row: pd.Series, index_col: str, peptide_col: str, fasta_df: pd.DataFrame, parse_from_peptide_col: bool = False) -> pd.Series:
 #     match = reg_positon_residue.search(row[index_col])
@@ -134,7 +150,15 @@ def lambda_function_for_msfragger_ptm_single_site(row: pd.Series, index_col: str
 #     return row
 
 
-def process_msfragger_ptm_single_site(file_path: str, index_col: str, peptide_col: str, output_file: str, fasta_file: str = "", get_position_from_peptide_column: bool = False, columns: str = "accession,id,sequence,protein_name"):
+def process_msfragger_ptm_single_site(
+    file_path: str,
+    index_col: str,
+    peptide_col: str,
+    output_file: str,
+    fasta_file: str = "",
+    get_position_from_peptide_column: bool = False,
+    columns: str = "accession,id,sequence,protein_name",
+):
     """
     Process an MSFragger PTM single site file to extract and calculate various fields, and save the processed data to an output file.
 
@@ -155,7 +179,13 @@ def process_msfragger_ptm_single_site(file_path: str, index_col: str, peptide_co
     print(df.shape)
 
     # Extract PrimaryID from the index column
-    df["PrimaryID"] = df[index_col].apply(lambda x: str(UniprotSequence(x, parse_acc=True)) if UniprotSequence(x, parse_acc=True).accession else x)
+    df["PrimaryID"] = df[index_col].apply(
+        lambda x: (
+            str(UniprotSequence(x, parse_acc=True))
+            if UniprotSequence(x, parse_acc=True).accession
+            else x
+        )
+    )
 
     # Read or fetch the FASTA data
     if fasta_file:
@@ -173,7 +203,12 @@ def process_msfragger_ptm_single_site(file_path: str, index_col: str, peptide_co
     print(df.shape)
 
     # Apply the lambda function to process each row
-    df = df.apply(lambda x: lambda_function_for_msfragger_ptm_single_site(x, index_col, peptide_col, fasta_df, get_position_from_peptide_column), axis=1)
+    df = df.apply(
+        lambda x: lambda_function_for_msfragger_ptm_single_site(
+            x, index_col, peptide_col, fasta_df, get_position_from_peptide_column
+        ),
+        axis=1,
+    )
     print(df.shape)
 
     # Save the processed DataFrame to the output file
@@ -183,9 +218,25 @@ def process_msfragger_ptm_single_site(file_path: str, index_col: str, peptide_co
 @click.command()
 @click.option("--file_path", "-f", help="Path to the file to be processed")
 @click.option("--index_col", "-i", help="Name of the index column", default="Index")
-@click.option("--peptide_col", "-p", help="Name of the peptide column", default="Peptide")
+@click.option(
+    "--peptide_col", "-p", help="Name of the peptide column", default="Peptide"
+)
 @click.option("--output_file", "-o", help="Path to the output file")
 @click.option("--fasta_file", "-a", help="Path to the fasta file")
-@click.option("--columns", "-c", help="UniProt data columns to be included", default="accession,id,sequence,protein_name")
-def main(file_path: str, index_col: str, peptide_col: str, output_file: str, fasta_file: str, columns: str):
-    process_msfragger_ptm_single_site(file_path, index_col, peptide_col, output_file, fasta_file, columns=columns)
+@click.option(
+    "--columns",
+    "-c",
+    help="UniProt data columns to be included",
+    default="accession,id,sequence,protein_name",
+)
+def main(
+    file_path: str,
+    index_col: str,
+    peptide_col: str,
+    output_file: str,
+    fasta_file: str,
+    columns: str,
+):
+    process_msfragger_ptm_single_site(
+        file_path, index_col, peptide_col, output_file, fasta_file, columns=columns
+    )

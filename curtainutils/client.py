@@ -3,7 +3,7 @@ import json
 import re
 from copy import deepcopy
 from typing import List, Dict, Optional, Generator
-
+import time
 import pandas as pd
 import requests
 import seaborn as sns
@@ -12,6 +12,7 @@ from matplotlib import pyplot as plt
 from curtainutils.common import curtain_base_payload
 from uniprotparser.betaparser import UniprotParser, UniprotSequence
 import numpy as np
+
 
 class NumpyEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -22,6 +23,7 @@ class NumpyEncoder(json.JSONEncoder):
         if isinstance(obj, np.ndarray):
             return obj.tolist()
         return super(NumpyEncoder, self).default(obj)
+
 
 class CurtainUniprotData:
     def __init__(self, uniprot: Dict):
@@ -54,10 +56,14 @@ class CurtainUniprotData:
         Returns:
             DataFrame row containing the UniProt data or None if not found
         """
-        return CurtainUniprotData.get_uniprot_data_from_pi_sta(primary_id, self.accMap, self.dataMap, self.db)
+        return CurtainUniprotData.get_uniprot_data_from_pi_sta(
+            primary_id, self.accMap, self.dataMap, self.db
+        )
 
     @staticmethod
-    def get_uniprot_data_from_pi_sta(primary_id: str, accMap: Dict, dataMap: Dict, db: pd.DataFrame) -> Optional[pd.Series]:
+    def get_uniprot_data_from_pi_sta(
+        primary_id: str, accMap: Dict, dataMap: Dict, db: pd.DataFrame
+    ) -> Optional[pd.Series]:
         if primary_id in accMap:
             acc_match_list = accMap[primary_id]
             if acc_match_list:
@@ -71,6 +77,7 @@ class CurtainUniprotData:
                             return filter_db.iloc[0]
         return None
 
+
 class CurtainClient:
     def __init__(self, base_url: str, api_key: str = ""):
         """
@@ -80,7 +87,7 @@ class CurtainClient:
             base_url: Base URL for Curtain API
             api_key: Optional API key for authentication
         """
-        self.base_url = base_url.rstrip('/')
+        self.base_url = base_url.rstrip("/")
         self.request_session = requests.Session()
         self.refresh_token = ""
         self.access_token = ""
@@ -107,8 +114,8 @@ class CurtainClient:
         res = r.json()
         yield res["results"]
 
-        while res.get('next'):
-            r = requests.get(res['next'], headers=headers)
+        while res.get("next"):
+            r = requests.get(res["next"], headers=headers)
             r.raise_for_status()
             res = r.json()
             yield res["results"]
@@ -127,10 +134,14 @@ class CurtainClient:
         Raises:
             requests.HTTPError: If API request fails
         """
-        file_data = {'file': ('curtain-settings.json', json.dumps(file, cls=NumpyEncoder))}
+        file_data = {
+            "file": ("curtain-settings.json", json.dumps(file, cls=NumpyEncoder))
+        }
         headers = self._get_auth_headers()
 
-        r = requests.post(f"{self.base_url}/curtain/", data=payload, files=file_data, headers=headers)
+        r = requests.post(
+            f"{self.base_url}/curtain/", data=payload, files=file_data, headers=headers
+        )
         r.raise_for_status()
 
         return r.json()["link_id"]
@@ -166,27 +177,141 @@ class CurtainClient:
         fig.tight_layout()
         plt.show()
 
-    def download_curtain_session(self, link_id: str) -> Optional[Dict]:
+    def download_curtain_session(
+        self,
+        link_id: str,
+        retries: int = 3,
+        show_progress: bool = False,
+        progress_callback=None,
+    ) -> Optional[Dict]:
         """
-        Download Curtain session data.
+        Download Curtain session data with retry, optional progress display, and callback support.
 
         Args:
             link_id: ID of the session to download
+            retries: Number of times to retry on failure (default: 3)
+            show_progress: If True, display download progress bar (default: False)
+            progress_callback: Optional callback function that receives (downloaded_bytes, total_bytes, percentage)
 
         Returns:
             Session data or None if download fails
         """
-        link = f"{self.base_url}/curtain/{link_id}/download/token=/"
-        req = requests.get(link)
 
-        if req.status_code == 200:
-            data = req.json()
-            if "url" in data:
-                result = requests.get(data["url"])
-                if result.status_code == 200:
-                    return result.json()
-            else:
-                return data
+        link = f"{self.base_url}/curtain/{link_id}/download/token=/"
+
+        for attempt in range(retries + 1):
+            try:
+                req = requests.get(link)
+
+                if req.status_code == 200:
+                    data = req.json()
+                    if "url" in data:
+                        # Download the actual data with optional progress
+                        for dl_attempt in range(retries + 1):
+                            try:
+                                if show_progress:
+                                    try:
+                                        from tqdm import tqdm
+                                    except ImportError:
+                                        print(
+                                            "tqdm not available, downloading without progress bar..."
+                                        )
+                                        show_progress = False
+
+                                if show_progress or progress_callback:
+                                    with requests.get(
+                                        data["url"], stream=True
+                                    ) as result:
+                                        if result.status_code == 200:
+                                            total = int(
+                                                result.headers.get("content-length", 0)
+                                            )
+                                            downloaded = 0
+                                            chunks = []
+
+                                            # Initialize progress bar if needed
+                                            pbar = None
+                                            if show_progress:
+                                                pbar = tqdm(
+                                                    total=total,
+                                                    unit="B",
+                                                    unit_scale=True,
+                                                    desc="Downloading",
+                                                )
+
+                                            try:
+                                                for chunk in result.iter_content(
+                                                    chunk_size=8192
+                                                ):
+                                                    if chunk:
+                                                        chunks.append(chunk)
+                                                        downloaded += len(chunk)
+
+                                                        # Update progress bar
+                                                        if pbar:
+                                                            pbar.update(len(chunk))
+
+                                                        # Call progress callback if provided
+                                                        if progress_callback:
+                                                            percentage = (
+                                                                (
+                                                                    downloaded
+                                                                    / total
+                                                                    * 100
+                                                                )
+                                                                if total > 0
+                                                                else 0
+                                                            )
+                                                            progress_callback(
+                                                                downloaded,
+                                                                total,
+                                                                percentage,
+                                                            )
+                                            finally:
+                                                if pbar:
+                                                    pbar.close()
+
+                                            content = b"".join(chunks)
+                                            return json.loads(content.decode())
+                                        elif dl_attempt < retries:
+                                            time.sleep(
+                                                2**dl_attempt
+                                            )  # Exponential backoff
+                                            continue
+                                        else:
+                                            return None
+                                else:
+                                    result = requests.get(data["url"])
+                                    if result.status_code == 200:
+                                        return result.json()
+                                    elif dl_attempt < retries:
+                                        time.sleep(2**dl_attempt)  # Exponential backoff
+                                        continue
+                                    else:
+                                        return None
+
+                            except (
+                                requests.exceptions.RequestException,
+                                json.JSONDecodeError,
+                            ) as e:
+                                if dl_attempt < retries:
+                                    time.sleep(2**dl_attempt)  # Exponential backoff
+                                    continue
+                                return None
+                    else:
+                        return data
+                elif attempt < retries:
+                    time.sleep(2**attempt)  # Exponential backoff
+                    continue
+                else:
+                    return None
+
+            except requests.exceptions.RequestException as e:
+                if attempt < retries:
+                    time.sleep(2**attempt)  # Exponential backoff
+                    continue
+                return None
+
         return None
 
     def download_sessions_list(self, url_list: List[str]) -> None:
@@ -204,24 +329,21 @@ class CurtainClient:
                 with open(f"{session_id}_raw.txt", "wt") as f:
                     f.write(result["raw"])
 
-
-
-
     def _prepare_common_payload(
-            self,
-            de_file: str,
-            raw_file: str,
-            fc_col: str,
-            transform_fc: bool,
-            transform_significant: bool,
-            reverse_fc: bool,
-            p_col: str,
-            comp_col: str,
-            comp_select: List[str],
-            primary_id_de_col: str,
-            primary_id_raw_col: str,
-            sample_cols: List[str],
-            description: str = "",
+        self,
+        de_file: str,
+        raw_file: str,
+        fc_col: str,
+        transform_fc: bool,
+        transform_significant: bool,
+        reverse_fc: bool,
+        p_col: str,
+        comp_col: str,
+        comp_select: List[str],
+        primary_id_de_col: str,
+        primary_id_raw_col: str,
+        sample_cols: List[str],
+        description: str = "",
     ) -> Dict:
         """
         Prepare common payload elements for both standard and PTM Curtain sessions.
@@ -280,7 +402,9 @@ class CurtainClient:
                 conditions.append(condition)
                 if color_position >= len(payload["settings"]["defaultColorList"]):
                     color_position = 0
-                color_map[condition] = payload["settings"]["defaultColorList"][color_position]
+                color_map[condition] = payload["settings"]["defaultColorList"][
+                    color_position
+                ]
                 color_position += 1
 
             # Initialize condition in sample order if needed
@@ -299,7 +423,7 @@ class CurtainClient:
             sample_map[sample] = {
                 "condition": condition,
                 "replicate": replicate,
-                "name": sample
+                "name": sample,
             }
 
         payload["settings"]["sampleMap"] = sample_map
@@ -307,20 +431,20 @@ class CurtainClient:
         payload["settings"]["conditionOrder"] = conditions
 
     def create_curtain_session_payload(
-            self,
-            de_file: str,
-            raw_file: str,
-            fc_col: str,
-            transform_fc: bool,
-            transform_significant: bool,
-            reverse_fc: bool,
-            p_col: str,
-            comp_col: str,
-            comp_select: List[str],
-            primary_id_de_col: str,
-            primary_id_raw_col: str,
-            sample_cols: List[str],
-            description: str = "",
+        self,
+        de_file: str,
+        raw_file: str,
+        fc_col: str,
+        transform_fc: bool,
+        transform_significant: bool,
+        reverse_fc: bool,
+        p_col: str,
+        comp_col: str,
+        comp_select: List[str],
+        primary_id_de_col: str,
+        primary_id_raw_col: str,
+        sample_cols: List[str],
+        description: str = "",
     ) -> Dict:
         """
         Create payload for standard Curtain session.
@@ -344,32 +468,42 @@ class CurtainClient:
             Configured payload for Curtain session
         """
         return self._prepare_common_payload(
-            de_file, raw_file, fc_col, transform_fc, transform_significant,
-            reverse_fc, p_col, comp_col, comp_select, primary_id_de_col,
-            primary_id_raw_col, sample_cols, description
+            de_file,
+            raw_file,
+            fc_col,
+            transform_fc,
+            transform_significant,
+            reverse_fc,
+            p_col,
+            comp_col,
+            comp_select,
+            primary_id_de_col,
+            primary_id_raw_col,
+            sample_cols,
+            description,
         )
 
     def create_curtain_ptm_session_payload(
-            self,
-            de_file: str,
-            raw_file: str,
-            fc_col: str,
-            transform_fc: bool,
-            transform_significant: bool,
-            reverse_fc: bool,
-            p_col: str,
-            comp_col: str,
-            comp_select: List[str],
-            primary_id_de_col: str,
-            primary_id_raw_col: str,
-            sample_cols: List[str],
-            peptide_col: str,
-            acc_col: str,
-            position_col: str,
-            position_in_peptide_col: str,
-            sequence_window_col: str,
-            score_col: str,
-            description: str = "",
+        self,
+        de_file: str,
+        raw_file: str,
+        fc_col: str,
+        transform_fc: bool,
+        transform_significant: bool,
+        reverse_fc: bool,
+        p_col: str,
+        comp_col: str,
+        comp_select: List[str],
+        primary_id_de_col: str,
+        primary_id_raw_col: str,
+        sample_cols: List[str],
+        peptide_col: str,
+        acc_col: str,
+        position_col: str,
+        position_in_peptide_col: str,
+        sequence_window_col: str,
+        score_col: str,
+        description: str = "",
     ) -> Dict:
         """
         Create payload for CurtainPTM session.
@@ -399,9 +533,19 @@ class CurtainClient:
             Configured payload for CurtainPTM session
         """
         payload = self._prepare_common_payload(
-            de_file, raw_file, fc_col, transform_fc, transform_significant,
-            reverse_fc, p_col, comp_col, comp_select, primary_id_de_col,
-            primary_id_raw_col, sample_cols, description
+            de_file,
+            raw_file,
+            fc_col,
+            transform_fc,
+            transform_significant,
+            reverse_fc,
+            p_col,
+            comp_col,
+            comp_select,
+            primary_id_de_col,
+            primary_id_raw_col,
+            sample_cols,
+            description,
         )
 
         # Add PTM-specific fields
@@ -415,25 +559,26 @@ class CurtainClient:
         return payload
 
     def create_curtain_payload(
-            self,
-            de_file: str,
-            raw_file: str,
-            fc_col: str,
-            transform_fc: bool,
-            transform_significant: bool,
-            reverse_fc: bool,
-            p_col: str,
-            comp_col: str,
-            comp_select: List[str],
-            primary_id_de_col: str,
-            primary_id_raw_col: str,
-            sample_cols: List[str],
-            peptide_col: str = "",
-            acc_col: str = "",
-            position_col: str = "",
-            position_in_peptide_col: str = "",
-            sequence_window_col: str = "",
-            score_col: str = "") -> Dict:
+        self,
+        de_file: str,
+        raw_file: str,
+        fc_col: str,
+        transform_fc: bool,
+        transform_significant: bool,
+        reverse_fc: bool,
+        p_col: str,
+        comp_col: str,
+        comp_select: List[str],
+        primary_id_de_col: str,
+        primary_id_raw_col: str,
+        sample_cols: List[str],
+        peptide_col: str = "",
+        acc_col: str = "",
+        position_col: str = "",
+        position_in_peptide_col: str = "",
+        sequence_window_col: str = "",
+        score_col: str = "",
+    ) -> Dict:
         """
         Create payload for either standard Curtain or CurtainPTM session based on parameters.
 
@@ -460,23 +605,53 @@ class CurtainClient:
         Returns:
             Configured payload for selected Curtain session type
         """
-        is_standard = all(not col for col in [
-            peptide_col, acc_col, position_col,
-            position_in_peptide_col, sequence_window_col, score_col
-        ])
+        is_standard = all(
+            not col
+            for col in [
+                peptide_col,
+                acc_col,
+                position_col,
+                position_in_peptide_col,
+                sequence_window_col,
+                score_col,
+            ]
+        )
 
         if is_standard:
             return self.create_curtain_session_payload(
-                de_file, raw_file, fc_col, transform_fc, transform_significant,
-                reverse_fc, p_col, comp_col, comp_select, primary_id_de_col,
-                primary_id_raw_col, sample_cols
+                de_file,
+                raw_file,
+                fc_col,
+                transform_fc,
+                transform_significant,
+                reverse_fc,
+                p_col,
+                comp_col,
+                comp_select,
+                primary_id_de_col,
+                primary_id_raw_col,
+                sample_cols,
             )
         else:
             return self.create_curtain_ptm_session_payload(
-                de_file, raw_file, fc_col, transform_fc, transform_significant,
-                reverse_fc, p_col, comp_col, comp_select, primary_id_de_col,
-                primary_id_raw_col, sample_cols, peptide_col, acc_col,
-                position_col, position_in_peptide_col, sequence_window_col, score_col
+                de_file,
+                raw_file,
+                fc_col,
+                transform_fc,
+                transform_significant,
+                reverse_fc,
+                p_col,
+                comp_col,
+                comp_select,
+                primary_id_de_col,
+                primary_id_raw_col,
+                sample_cols,
+                peptide_col,
+                acc_col,
+                position_col,
+                position_in_peptide_col,
+                sequence_window_col,
+                score_col,
             )
 
     def retrieve_curtain_session(self, link_id: str, token: str = "") -> Dict:
@@ -546,7 +721,9 @@ def parse_old_version(json_data: Dict) -> Dict:
     if "log2FCCutoff" not in json_data["settings"]:
         json_data["settings"]["log2FCCutoff"] = 0.6
     if "dataColumns" in json_data["settings"]:
-        json_data["settings"]["dataColumns"] = json_data["settings"]["dataColumns"].split(",")
+        json_data["settings"]["dataColumns"] = json_data["settings"][
+            "dataColumns"
+        ].split(",")
 
     return json_data
 
@@ -564,7 +741,10 @@ def parse_v2(json_data: Dict) -> Dict:
     # Process V2 format
     return json_data
 
-def create_imputation_map(raw_df: pd.DataFrame|str, primary_id: str, sample_cols: List[str]) -> Dict:
+
+def create_imputation_map(
+    raw_df: pd.DataFrame | str, primary_id: str, sample_cols: List[str]
+) -> Dict:
     if isinstance(raw_df, str):
         if raw_df.endswith("tsv") or raw_df.endswith("txt"):
             raw_df = pd.read_csv(raw_df, sep="\t")
@@ -602,7 +782,7 @@ def add_imputation_map(payload: Dict, imputation_map: Dict) -> Dict:
     return payload
 
 
-def add_uniprot_data(payload: Dict, raw_df: pd.DataFrame|str):
+def add_uniprot_data(payload: Dict, raw_df: pd.DataFrame | str):
     """
     Add UniProt data to the payload.
 
@@ -670,7 +850,9 @@ def add_uniprot_data(payload: Dict, raw_df: pd.DataFrame|str):
                         df_acc_parse.at[i, "Gene Names"] = r["Gene Names"]
                     if pd.notnull(r["Subcellular location [CC]"]):
                         try:
-                            note_position = r["Subcellular location [CC]"].index("Note=")
+                            note_position = r["Subcellular location [CC]"].index(
+                                "Note="
+                            )
                         except ValueError:
                             note_position = -1
                         sub_loc = []
@@ -717,7 +899,12 @@ def add_uniprot_data(payload: Dict, raw_df: pd.DataFrame|str):
                                 elif "/note=" in s:
                                     match = domain_name_regex.search(s)
                                     if match:
-                                        mutagenesis.append({"position": position, "note": match.group(1)})
+                                        mutagenesis.append(
+                                            {
+                                                "position": position,
+                                                "note": match.group(1),
+                                            }
+                                        )
                         df_acc_parse.at[i, "Mutagenesis"] = mutagenesis
                     df_acc_parse.at[i, "_id"] = r["From"]
                     db[r["Entry"]] = df_acc_parse.iloc[i].fillna("").to_dict()
@@ -730,14 +917,20 @@ def add_uniprot_data(payload: Dict, raw_df: pd.DataFrame|str):
                             for q in query.split(";"):
                                 if q not in uniprot_dataMap:
                                     uniprot_dataMap[q] = r["Entry"]
-                                    if pd.notnull(r["Gene Names"]) and r["Gene Names"] != "":
+                                    if (
+                                        pd.notnull(r["Gene Names"])
+                                        and r["Gene Names"] != ""
+                                    ):
                                         if r["Gene Names"] not in geneNameToAcc:
                                             geneNameToAcc[r["Gene Names"]] = {}
                                         geneNameToAcc[r["Gene Names"]][q] = True
                                 else:
                                     if q == r["Entry"]:
                                         uniprot_dataMap[q] = r["Entry"]
-                                        if pd.notnull(r["Gene Names"]) and r["Gene Names"] != "":
+                                        if (
+                                            pd.notnull(r["Gene Names"])
+                                            and r["Gene Names"] != ""
+                                        ):
                                             if r["Gene Names"] not in geneNameToAcc:
                                                 geneNameToAcc[r["Gene Names"]] = {}
                                             geneNameToAcc[r["Gene Names"]][q] = True
@@ -746,13 +939,25 @@ def add_uniprot_data(payload: Dict, raw_df: pd.DataFrame|str):
                                         if len(q_splitted) > 1:
                                             if q_splitted[0] == r["Entry"]:
                                                 uniprot_dataMap[q] = r["Entry"]
-                                                if pd.notnull(r["Gene Names"]) and r["Gene Names"] != "":
-                                                    if r["Gene Names"] not in geneNameToAcc:
-                                                        geneNameToAcc[r["Gene Names"]] = {}
-                                                    geneNameToAcc[r["Gene Names"]][q_splitted[0]] = True
+                                                if (
+                                                    pd.notnull(r["Gene Names"])
+                                                    and r["Gene Names"] != ""
+                                                ):
+                                                    if (
+                                                        r["Gene Names"]
+                                                        not in geneNameToAcc
+                                                    ):
+                                                        geneNameToAcc[
+                                                            r["Gene Names"]
+                                                        ] = {}
+                                                    geneNameToAcc[r["Gene Names"]][
+                                                        q_splitted[0]
+                                                    ] = True
     db_df = pd.DataFrame.from_dict(db, orient="index")
     for pid in primary_id_col:
-        uniprot = CurtainUniprotData.get_uniprot_data_from_pi_sta(pid, accMap, uniprot_dataMap, db_df)
+        uniprot = CurtainUniprotData.get_uniprot_data_from_pi_sta(
+            pid, accMap, uniprot_dataMap, db_df
+        )
         if isinstance(uniprot, pd.Series):
             if pd.notnull(uniprot["Gene Names"]) and uniprot["Gene Names"] != "":
                 if uniprot["Gene Names"] not in allGenes:
@@ -764,7 +969,6 @@ def add_uniprot_data(payload: Dict, raw_df: pd.DataFrame|str):
                         if n not in genesMap:
                             genesMap[n] = {}
                         genesMap[n][uniprot["Gene Names"]] = True
-
 
     if "extraData" not in payload:
         payload["extraData"] = {
@@ -781,7 +985,5 @@ def add_uniprot_data(payload: Dict, raw_df: pd.DataFrame|str):
                 "genesMap": genesMap,
                 "primaryIDsmap": primary_id_map,
                 "allGenes": allGenes,
-            }
+            },
         }
-
-

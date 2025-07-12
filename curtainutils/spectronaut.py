@@ -6,8 +6,11 @@ from sequal.sequence import Sequence
 from uniprotparser.betaparser import UniprotSequence, UniprotParser
 import re
 from curtainutils.common import read_fasta
+
 reg_pattern = re.compile("_\w(\d+)_")
 protein_name_pattern = re.compile("(\w+_\w+)")
+
+
 # def lambda_function_for_spectronaut_ptm(row: pd.Series, index_col: str, peptide_col: str, fasta_df: pd.DataFrame) -> pd.Series:
 #     d = row[index_col].split("_")
 #     row["Position"] = int(d[-2][1:])
@@ -48,7 +51,9 @@ protein_name_pattern = re.compile("(\w+_\w+)")
 #                     row["Sequence.window"] = sequence_window
 #                     break
 #     return row
-def lambda_function_for_spectronaut_ptm(row: pd.Series, index_col: str, peptide_col: str, fasta_df: pd.DataFrame) -> pd.Series:
+def lambda_function_for_spectronaut_ptm(
+    row: pd.Series, index_col: str, peptide_col: str, fasta_df: pd.DataFrame
+) -> pd.Series:
     """
     Process a row of Spectronaut PTM data to extract and calculate various fields.
 
@@ -69,19 +74,22 @@ def lambda_function_for_spectronaut_ptm(row: pd.Series, index_col: str, peptide_
     uniprot_id = row["UniprotID"]
     if uniprot_id in fasta_df["Entry"].values:
         matched_acc_row = fasta_df[fasta_df["Entry"].str.contains(uniprot_id)]
-        reformat_seq = row[peptide_col].split(";")[0].upper()
-
+        reformat_seq = row[peptide_col].split(";")[0].upper().replace("_", "")
         if not matched_acc_row.empty:
             for _, row2 in matched_acc_row.iterrows():
-                peptide_seq = reformat_seq[:len(reformat_seq)-2]
+                peptide_seq = reformat_seq[: len(reformat_seq) - 2]
+                peptide_seq = Sequence(peptide_seq).to_stripped_string()
                 seq = row2["Sequence"]
-
+                if pd.isnull(seq):
+                    continue
                 # Find the position of the peptide sequence in the protein sequence
                 try:
                     peptide_position = seq.index(peptide_seq)
                 except ValueError:
                     try:
-                        peptide_position = seq.replace("I", "L").index(peptide_seq.replace("I", "L"))
+                        peptide_position = seq.replace("I", "L").index(
+                            peptide_seq.replace("I", "L")
+                        )
                         row["Comment"] = "I replaced by L"
                     except ValueError:
                         print(uniprot_id, peptide_seq)
@@ -94,28 +102,36 @@ def lambda_function_for_spectronaut_ptm(row: pd.Series, index_col: str, peptide_
                                     peptide_position = seq.index(peptide_seq)
                                 except ValueError:
                                     try:
-                                        peptide_position = seq.replace("I", "L").index(peptide_seq.replace("I", "L"))
+                                        peptide_position = seq.replace("I", "L").index(
+                                            peptide_seq.replace("I", "L")
+                                        )
                                         row["Comment"] = "I replaced by L"
                                     except ValueError:
                                         continue
                                 if peptide_position >= 0:
                                     break
-
                 if peptide_position >= 0:
                     # Populate additional fields in the row
                     row["Protein.Name"] = row2.get("Protein names", "")
                     position_in_peptide = row["Position"] - peptide_position
                     row["Position.in.peptide"] = position_in_peptide
                     row["Variant"] = row2["Entry"]
+                    row["PeptideSequence"] = peptide_seq
 
                     # Calculate the sequence window
                     start = max(0, row["Position"] - 11)
                     end = min(len(seq), row["Position"] + 10)
-                    sequence_window = seq[start:row["Position"] - 1] + seq[row["Position"] - 1] + seq[row["Position"]:end]
+                    sequence_window = (
+                        seq[start : row["Position"] - 1]
+                        + seq[row["Position"] - 1]
+                        + seq[row["Position"] : end]
+                    )
 
                     # Pad the sequence window if necessary
                     if start == 0:
-                        sequence_window = "_" * (10 - (row["Position"] - 1)) + sequence_window
+                        sequence_window = (
+                            "_" * (10 - (row["Position"] - 1)) + sequence_window
+                        )
                     if end == len(seq):
                         sequence_window += "_" * (21 - len(sequence_window))
 
@@ -123,7 +139,14 @@ def lambda_function_for_spectronaut_ptm(row: pd.Series, index_col: str, peptide_
                     break
     return row
 
-def lambda_function_for_spectronaut_ptm_mode_2(row: pd.Series, index_col: str, peptide_col: str, fasta_df: pd.DataFrame, modification: str) -> pd.Series:
+
+def lambda_function_for_spectronaut_ptm_mode_2(
+    row: pd.Series,
+    index_col: str,
+    peptide_col: str,
+    fasta_df: pd.DataFrame,
+    modification: str,
+) -> pd.Series:
     """
     Process a row of Spectronaut PTM data to extract and calculate various fields.
 
@@ -140,7 +163,7 @@ def lambda_function_for_spectronaut_ptm_mode_2(row: pd.Series, index_col: str, p
     d = row[index_col].split("_")
     row["Position"] = int(d[-2][1:])
     if row[peptide_col].startswith("(") or row[peptide_col].startswith("["):
-        row[peptide_col] = "_" + row[peptide_col]
+        row[peptide_col] = "_" + row[peptide_col].split(".")[0]
         seq = Sequence(row[peptide_col])
         seq = seq[1:]
         seq2 = ""
@@ -152,7 +175,7 @@ def lambda_function_for_spectronaut_ptm_mode_2(row: pd.Series, index_col: str, p
         seq = Sequence(seq2)
         stripped_seq = seq.to_stripped_string()
     else:
-        seq = Sequence(row[peptide_col])
+        seq = Sequence(row[peptide_col].split(".")[0])
         stripped_seq = seq.to_stripped_string()
     # Check if the UniprotID exists in the FASTA DataFrame
     entry = row["UniprotID"]
@@ -173,7 +196,9 @@ def lambda_function_for_spectronaut_ptm_mode_2(row: pd.Series, index_col: str, p
                             peptide_position = protein_seq.index(peptide_seq)
                         except ValueError:
                             try:
-                                peptide_position = protein_seq.replace("I", "L").index(peptide_seq.replace("I", "L"))
+                                peptide_position = protein_seq.replace("I", "L").index(
+                                    peptide_seq.replace("I", "L")
+                                )
                                 row["Comment"] = "I replaced by L"
                             except ValueError:
                                 print("Error", entry, peptide_seq)
@@ -200,11 +225,17 @@ def lambda_function_for_spectronaut_ptm_mode_2(row: pd.Series, index_col: str, p
 
                             start = max(0, position_in_protein - 11)
                             end = min(len(protein_seq), position_in_protein + 10)
-                            sequence_window = protein_seq[start:position_in_protein - 1] + protein_seq[
-                                position_in_protein - 1] + protein_seq[position_in_protein:end]
+                            sequence_window = (
+                                protein_seq[start : position_in_protein - 1]
+                                + protein_seq[position_in_protein - 1]
+                                + protein_seq[position_in_protein:end]
+                            )
 
                             if start == 0:
-                                sequence_window = "_" * (10 - (position_in_protein - 1)) + sequence_window
+                                sequence_window = (
+                                    "_" * (10 - (position_in_protein - 1))
+                                    + sequence_window
+                                )
                             if end == len(protein_seq):
                                 sequence_window += "_" * (21 - len(sequence_window))
 
@@ -213,16 +244,17 @@ def lambda_function_for_spectronaut_ptm_mode_2(row: pd.Series, index_col: str, p
                     break
     return row
 
+
 def process_spectronaut_ptm(
-        file_path: str,
-        index_col: str,
-        peptide_col: str,
-        output_file: str,
-        fasta_file: str = "",
-        mode: str = "1",
-        modification: str = "Phospho (STY)",
-        columns: str = "accession,id,sequence,protein_name"
-        ):
+    file_path: str,
+    index_col: str,
+    peptide_col: str,
+    output_file: str,
+    fasta_file: str = "",
+    mode: str = "1",
+    modification: str = "Phospho (STY)",
+    columns: str = "accession,id,sequence,protein_name",
+):
     """
     Process a Spectronaut PTM file to extract and calculate various fields, and save the processed data to an output file.
 
@@ -241,7 +273,13 @@ def process_spectronaut_ptm(
     df = pd.read_csv(file_path, sep="\t")
 
     # Extract UniprotID from the index column
-    df["UniprotID"] = df[index_col].apply(lambda x: str(UniprotSequence(x, parse_acc=True)) if UniprotSequence(x, parse_acc=True).accession else x)
+    df["UniprotID"] = df["Uniprot"].apply(
+        lambda x: (
+            str(UniprotSequence(x, parse_acc=True))
+            if UniprotSequence(x, parse_acc=True).accession
+            else x
+        )
+    )
 
     # Read or fetch the FASTA data
     if fasta_file:
@@ -258,16 +296,26 @@ def process_spectronaut_ptm(
 
     if mode == "1":
         # Apply the lambda function to process each row
-        df = df.apply(lambda x: lambda_function_for_spectronaut_ptm(x, index_col, peptide_col, fasta_df), axis=1)
+        df = df.apply(
+            lambda x: lambda_function_for_spectronaut_ptm(
+                x, index_col, peptide_col, fasta_df
+            ),
+            axis=1,
+        )
     elif mode == "2":
         ptm_group_cols = [i for i in df.columns if i.endswith("PTM.Group")]
         site_prob_cols = [i for i in df.columns if i.endswith("PTM.SiteProbability")]
         new_df = []
         for i, row in df.iterrows():
             if row["PTM.ModificationTitle"] == modification:
-                new_row = {"UniprotID": row["UniprotID"], index_col: row[index_col],
-                           "PEP.SiteProbability": "", "PTM.ModificationTitle": row["PTM.ModificationTitle"],
-                           "PG.ProteinGroups": row["PG.ProteinGroups"], "PG.Genes": row["PG.Genes"]}
+                new_row = {
+                    "UniprotID": row["UniprotID"],
+                    index_col: row[index_col],
+                    "PEP.SiteProbability": "",
+                    "PTM.ModificationTitle": row["PTM.ModificationTitle"],
+                    "PG.ProteinGroups": row["PG.ProteinGroups"],
+                    "PG.Genes": row["PG.Genes"],
+                }
                 for col in ptm_group_cols:
                     if row[col] != "Filtered" and pd.notnull(row[col]):
                         new_row[peptide_col] = row[col].replace("_", "").split(".")[0]
@@ -284,17 +332,42 @@ def process_spectronaut_ptm(
                     new_df.append(new_row)
         if len(new_df) > 0:
             df = pd.DataFrame(new_df)
-            df = df.apply(lambda x: lambda_function_for_spectronaut_ptm_mode_2(x, index_col, peptide_col, fasta_df, modification), axis=1)
+            df = df.apply(
+                lambda x: lambda_function_for_spectronaut_ptm_mode_2(
+                    x, index_col, peptide_col, fasta_df, modification
+                ),
+                axis=1,
+            )
     # Save the processed DataFrame to the output file
     df.to_csv(output_file, sep="\t", index=False)
 
+
 @click.command()
 @click.option("--file_path", "-f", help="Path to the file to be processed")
-@click.option("--index_col", "-i", help="Name of the index column", default="PTM_collapse_key")
-@click.option("--peptide_col", "-p", help="Name of the peptide column", default="PEP.StrippedSequence")
+@click.option(
+    "--index_col", "-i", help="Name of the index column", default="PTM_collapse_key"
+)
+@click.option(
+    "--peptide_col",
+    "-p",
+    help="Name of the peptide column",
+    default="PEP.StrippedSequence",
+)
 @click.option("--output_file", "-o", help="Path to the output file")
 @click.option("--fasta_file", "-a", help="Path to the fasta file")
 @click.option("--mode", "-m", help="Mode of operation", default="1")
-@click.option("--modification", "-d", help="Modification to be processed", default="Phospho (STY)")
-def main(file_path: str, index_col: str, peptide_col: str, output_file: str, fasta_file: str, mode: str, modification: str):
-    process_spectronaut_ptm(file_path, index_col, peptide_col, output_file, fasta_file, mode, modification)
+@click.option(
+    "--modification", "-d", help="Modification to be processed", default="Phospho (STY)"
+)
+def main(
+    file_path: str,
+    index_col: str,
+    peptide_col: str,
+    output_file: str,
+    fasta_file: str,
+    mode: str,
+    modification: str,
+):
+    process_spectronaut_ptm(
+        file_path, index_col, peptide_col, output_file, fasta_file, mode, modification
+    )
