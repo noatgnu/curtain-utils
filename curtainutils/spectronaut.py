@@ -113,18 +113,24 @@ def lambda_function_for_spectronaut_ptm(
                 if peptide_position >= 0:
                     # Populate additional fields in the row
                     row["Protein.Name"] = row2.get("Protein names", "")
-                    position_in_peptide = row["Position"] - peptide_position
+                    # Calculate position in peptide: row["Position"] is 1-based absolute position
+                    # peptide_position is 0-based start of peptide in protein
+                    # Position in peptide = absolute position - start of peptide
+                    position_in_peptide = row["Position"] - (peptide_position + 1) + 1
                     row["Position.in.peptide"] = position_in_peptide
                     row["Variant"] = row2["Entry"]
                     row["PeptideSequence"] = peptide_seq
 
-                    # Calculate the sequence window
-                    start = max(0, row["Position"] - 11)
-                    end = min(len(seq), row["Position"] + 10)
+                    # Calculate the sequence window centered on the modification site
+                    # row["Position"] is 1-based, so convert to 0-based for array indexing
+                    modification_pos_0based = row["Position"] - 1
+                    start = max(0, modification_pos_0based - 10)
+                    end = min(len(seq), modification_pos_0based + 11)
+
                     sequence_window = (
-                        seq[start : row["Position"] - 1]
-                        + seq[row["Position"] - 1]
-                        + seq[row["Position"] : end]
+                        seq[start : modification_pos_0based]
+                        + seq[modification_pos_0based]
+                        + seq[modification_pos_0based + 1 : end]
                     )
 
                     # Pad the sequence window if necessary
@@ -219,16 +225,20 @@ def lambda_function_for_spectronaut_ptm_mode_2(
                                 #        if peptide_position >= 0:
                                 #            break
                         if peptide_position >= 0:
-                            position_in_protein = i.position + peptide_position
+                            # Calculate absolute position in protein: peptide start (1-based) + position within peptide - 1
+                            position_in_protein = (peptide_position + 1) + (i.position - 1) + 1
                             row["Position"] = position_in_protein
                             row["Variant"] = row2["Entry"]
 
-                            start = max(0, position_in_protein - 11)
-                            end = min(len(protein_seq), position_in_protein + 10)
+                            # Calculate sequence window centered on the modification site
+                            modification_pos_0based = position_in_protein - 1
+                            start = max(0, modification_pos_0based - 10)
+                            end = min(len(protein_seq), modification_pos_0based + 11)
+
                             sequence_window = (
-                                protein_seq[start : position_in_protein - 1]
-                                + protein_seq[position_in_protein - 1]
-                                + protein_seq[position_in_protein:end]
+                                protein_seq[start : modification_pos_0based]
+                                + protein_seq[modification_pos_0based]
+                                + protein_seq[modification_pos_0based + 1:end]
                             )
 
                             if start == 0:
@@ -244,6 +254,100 @@ def lambda_function_for_spectronaut_ptm_mode_2(
                     break
     return row
 
+def lambda_function_for_spectronaut_ptm_mode_3(
+    row: pd.Series,
+    index_col: str,
+    peptide_col: str,
+    fasta_df: pd.DataFrame,
+    modification: str,
+) -> pd.Series:
+    """
+    Process a row of Spectronaut PTM data to extract and calculate various fields.
+
+    Args:
+        row (pd.Series): A row from the Spectronaut PTM DataFrame.
+        index_col (str): The name of the index column in the DataFrame.
+        peptide_col (str): The name of the peptide column in the DataFrame.
+        fasta_df (pd.DataFrame): A DataFrame containing FASTA sequences.
+
+    Returns:
+        pd.Series: The processed row with additional fields.
+    """
+    # Extract position from the index column
+    d = row[index_col].split("_")
+    row["Position"] = int(d[-2][1:])
+    print(row[index_col])
+    if pd.isnull(row[peptide_col]) or row[peptide_col].strip() == "":
+        return row
+    if row[peptide_col].startswith("(") or row[peptide_col].startswith("["):
+        seq = Sequence.from_proforma(row[peptide_col])
+        seq = seq[1:]
+        seq2 = ""
+        for i in seq:
+            if i.mods:
+                seq2 += i.value + "(" + i.mods[0].value + ")"
+            else:
+                seq2 += i.value
+        seq = Sequence(seq2)
+        stripped_seq = seq.to_stripped_string()
+    else:
+        seq = Sequence(row[peptide_col])
+        stripped_seq = seq.to_stripped_string()
+    # Check if the UniprotID exists in the FASTA DataFrame
+    entry = row["UniprotID"]
+    if entry in fasta_df["Entry"].values:
+        matched_acc_row = fasta_df[fasta_df["Entry"].str.contains(entry)]
+        if not matched_acc_row.empty:
+            for i in seq:
+                if any(mod.value == modification for mod in i.mods):
+                    row["Position.in.peptide"] = str(i.position + 1)
+                    row["Residue"] = i.value
+
+                    for _, row2 in matched_acc_row.iterrows():
+                        protein_seq = row2["Sequence"]
+                        peptide_seq = stripped_seq
+                        peptide_position = None
+                        try:
+                            peptide_position = protein_seq.index(peptide_seq)
+                        except ValueError:
+                            try:
+                                peptide_position = protein_seq.replace("I", "L").index(
+                                    peptide_seq.replace("I", "L")
+                                )
+                                row["Comment"] = "I replaced by L"
+                            except ValueError:
+                                print("Error", entry, peptide_seq)
+
+                                continue
+                        if peptide_position is not None:
+                            if peptide_position >= 0:
+                                position_in_protein = i.position + peptide_position
+                                if row["Position"] != position_in_protein + 1:
+                                    continue
+                                row["Position"] = position_in_protein + 1
+                                row["Variant"] = row2["Entry"]
+
+                                start = position_in_protein - 10
+                                end = position_in_protein + 11
+
+                                sequence_window = ""
+
+                                if start < 0:
+                                    sequence_window += "_" * (-start)
+                                    sequence_window += protein_seq[0:end]
+                                elif end > len(protein_seq):
+                                    sequence_window += protein_seq[start: len(protein_seq)]
+                                    sequence_window += "_" * (end - len(protein_seq))
+                                else:
+                                    sequence_window = protein_seq[start:end]
+
+                                row["Sequence.window"] = sequence_window
+                                row["Protein.Name"] = row2.get("Protein names", "")
+                                break
+                    if "Sequence.window" not in row:
+                        continue
+                    break
+    return row
 
 def process_spectronaut_ptm(
     file_path: str,
@@ -251,6 +355,7 @@ def process_spectronaut_ptm(
     peptide_col: str,
     output_file: str,
     fasta_file: str = "",
+    uniprot_id_col: str = "UniprotID",
     mode: str = "1",
     modification: str = "Phospho (STY)",
     columns: str = "accession,id,sequence,protein_name",
@@ -271,15 +376,23 @@ def process_spectronaut_ptm(
     """
     # Read the input file into a DataFrame
     df = pd.read_csv(file_path, sep="\t")
-
     # Extract UniprotID from the index column
-    df["UniprotID"] = df["Uniprot"].apply(
-        lambda x: (
-            str(UniprotSequence(x, parse_acc=True))
-            if UniprotSequence(x, parse_acc=True).accession
-            else x
+    if uniprot_id_col:
+        df["UniprotID"] = df["Uniprot"].apply(
+            lambda x: (
+                str(UniprotSequence(x, parse_acc=True))
+                if UniprotSequence(x, parse_acc=True).accession
+                else x
+            )
         )
-    )
+    else:
+        df[index_col] = df["Uniprot"].apply(
+            lambda x: (
+                str(UniprotSequence(x, parse_acc=True))
+                if UniprotSequence(x, parse_acc=True).accession
+                else x.split("_")[0]
+            )
+        )
 
     # Read or fetch the FASTA data
     if fasta_file:
@@ -338,6 +451,17 @@ def process_spectronaut_ptm(
                 ),
                 axis=1,
             )
+    elif mode == "3":
+        # Apply the lambda function for mode 3
+        for i, row in df.iterrows():
+            df.at[i, "ProcessedSequence"] = row[peptide_col].replace("_", "").split(".")[0]
+            df.at[i, "PG.ProteinGroups"] = row[uniprot_id_col]
+        df = df.apply(
+            lambda x: lambda_function_for_spectronaut_ptm_mode_3(
+                x, index_col, "ProcessedSequence", fasta_df, modification
+            ),
+            axis=1,
+        )
     # Save the processed DataFrame to the output file
     df.to_csv(output_file, sep="\t", index=False)
 
@@ -355,6 +479,12 @@ def process_spectronaut_ptm(
 )
 @click.option("--output_file", "-o", help="Path to the output file")
 @click.option("--fasta_file", "-a", help="Path to the fasta file")
+@click.option(
+    "--uniprot_id_col",
+    "-u",
+    help="Column name for Uniprot ID",
+    default="",
+)
 @click.option("--mode", "-m", help="Mode of operation", default="1")
 @click.option(
     "--modification", "-d", help="Modification to be processed", default="Phospho (STY)"
@@ -365,9 +495,10 @@ def main(
     peptide_col: str,
     output_file: str,
     fasta_file: str,
+    uniprot_id_col: str,
     mode: str,
     modification: str,
 ):
     process_spectronaut_ptm(
-        file_path, index_col, peptide_col, output_file, fasta_file, mode, modification
+        file_path, index_col, peptide_col, output_file, fasta_file, uniprot_id_col, mode, modification
     )
