@@ -129,7 +129,7 @@ print(f"Access your visualization at: https:/frontend/#/{link_id}")
 from curtainutils.client import CurtainClient, add_imputation_map, create_imputation_map, add_uniprot_data_ptm
 
 # Initialize client for CurtainPTM
-client = CurtainClient("https://curtainptm.proteo.info") # Optional api_key parameter
+client = CurtainClient("https://your-curtain-server.com") # Optional api_key parameter
 
 # Define PTM-specific parameters
 de_file = "ptm_differential_data.txt"  # Must contain PTM-specific columns
