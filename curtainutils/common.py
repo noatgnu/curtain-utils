@@ -77,7 +77,7 @@ curtain_base_project_form = {
 
 
 curtain_base_settings = {
-    "fetchUniprot": True,
+    "fetchUniProt": True,
     "sampleMap": {},
     "barchartColorMap": {},
     "pCutoff": 0.05,
@@ -148,7 +148,7 @@ curtain_base_settings = {
 }
 
 curtain_ptm_settings = {
-    "fetchUniprot": True,
+    "fetchUniProt": True,
     "sampleMap": {},
     "barchartColorMap": {},
     "pCutoff": 0.05,
@@ -230,7 +230,7 @@ curtain_base_payload = {
     "selectionsMap": {},
     "selectionsName": [],
     "settings": curtain_base_settings,
-    "fetchUniprot": True,
+    "fetchUniProt": True,
     "annotatedData": {},
 }
 

@@ -75,114 +75,74 @@ spn-curtainptm -f spectronaut_data.txt -o curtain_input.txt
 ```py
 from curtainutils.client import CurtainClient, add_imputation_map, create_imputation_map, add_uniprot_data
 
-# Initialize client
-client = CurtainClient("https://your-curtain-server.com") # Optional api_key parameters
+client = CurtainClient("https://your-curtain-server.com")
 
-# Define parameters
-de_file = "differential_data.txt"
-raw_file = "raw_data.txt"
-fc_col = "log2FC"
-p_col = "p_value"
-primary_id_de_col = "Protein"
-primary_id_raw_col = "Protein"
-sample_cols = ["Sample1.1", "Sample1.2", "Sample1.3", "Sample2.1", "Sample2.2", "Sample2.3"]
-description = "My protein analysis"
-# Create payload
 payload = client.create_curtain_session_payload(
-    de_file=de_file,
-    raw_file=raw_file,
-    fc_col=fc_col,
-    transform_fc=False,  # Set to True if fold change needs log transformation
-    transform_significant=False,  # Set to True if p-values need -log10 transformation
-    reverse_fc=False,  # Set to True to reverse fold change direction
-    p_col=p_col,
-    comp_col="",  # Optional comparison column
-    comp_select=[],  # Optional comparison values to select
-    primary_id_de_col=primary_id_de_col,
-    primary_id_raw_col=primary_id_raw_col,
-    sample_cols=sample_cols,
-    description=description
+    de_file="differential_data.txt",
+    raw_file="raw_data.txt",
+    fc_col="log2FC",
+    transform_fc=False,
+    transform_significant=False,
+    reverse_fc=False,
+    p_col="p_value",
+    comp_col="",
+    comp_select=[],
+    primary_id_de_col="Protein",
+    primary_id_raw_col="Protein",
+    sample_cols=["Sample1.1", "Sample1.2", "Sample1.3", "Sample2.1", "Sample2.2", "Sample2.3"],
+    description="My protein analysis"
 )
 
-# Optional: Add uniprot data
-add_uniprot_data(payload, raw_file)
+add_uniprot_data(payload, "raw_data.txt")
 
-# Optional: Add imputation map
-imputation_file = "imputed_data.txt" 
-imputation_map = create_imputation_map(imputation_file, primary_id_raw_col, sample_cols)
+imputation_map = create_imputation_map("imputed_data.txt", "Protein", sample_cols)
 add_imputation_map(payload, imputation_map)
 
-# Submit to server
 package = {
     "enable": "True",
-    "description": description,
+    "description": "My protein analysis",
     "curtain_type": "TP",
-  "permanent": "False",
+    "permanent": "False",
 }
 link_id = client.post_curtain_session(package, payload)
 print(f"Access your visualization at: https:/frontend/#/{link_id}")
 ```
 
-### Upload to CurtainPTM backend (PTM-specific)
+### Upload to CurtainPTM backend
 
 ```py
 from curtainutils.client import CurtainClient, add_imputation_map, create_imputation_map, add_uniprot_data_ptm
 
-# Initialize client for CurtainPTM
-client = CurtainClient("https://your-curtain-server.com") # Optional api_key parameter
+client = CurtainClient("https://your-curtain-server.com")
 
-# Define PTM-specific parameters
-de_file = "ptm_differential_data.txt"  # Must contain PTM-specific columns
-raw_file = "ptm_raw_data.txt"
-fc_col = "log2FoldChange"
-p_col = "adj.P.Val"
-primary_id_de_col = "Unique identifier"  # Primary ID in differential data
-primary_id_raw_col = "T: Unique identifier"  # Primary ID in raw data (PTM format)
-sample_cols = ["Control.1", "Control.2", "Control.3", "Treatment.1", "Treatment.2", "Treatment.3"]
-
-# PTM-specific columns
-peptide_col = "Phospho (STY) Probabilities"  # Peptide sequences
-acc_col = "Protein"  # UniProt accessions
-position_col = "Position"  # PTM positions in protein
-position_in_peptide_col = "Position in peptide"  # PTM positions in peptide
-sequence_window_col = "Sequence window"  # Protein sequence windows
-score_col = "Localization prob"  # PTM localization scores
-
-description = "My PTM analysis"
-
-# Create CurtainPTM payload
 payload = client.create_curtain_ptm_session_payload(
-    de_file=de_file,
-    raw_file=raw_file,
-    fc_col=fc_col,
-    transform_fc=False,  # Set to True if fold change needs log2 transformation
-    transform_significant=False,  # Set to True if p-values need -log10 transformation
-    reverse_fc=False,  # Set to True to reverse fold change direction
-    p_col=p_col,
-    primary_id_de_col=primary_id_de_col,
-    primary_id_raw_col=primary_id_raw_col,
-    sample_cols=sample_cols,
-    peptide_col=peptide_col,
-    acc_col=acc_col,
-    position_col=position_col,
-    position_in_peptide_col=position_in_peptide_col,
-    sequence_window_col=sequence_window_col,
-    score_col=score_col,
-    description=description
+    de_file="ptm_differential_data.txt",
+    raw_file="ptm_raw_data.txt",
+    fc_col="log2FoldChange",
+    transform_fc=False,
+    transform_significant=False,
+    reverse_fc=False,
+    p_col="adj.P.Val",
+    primary_id_de_col="Unique identifier",
+    primary_id_raw_col="T: Unique identifier",
+    sample_cols=["Control.1", "Control.2", "Control.3", "Treatment.1", "Treatment.2", "Treatment.3"],
+    peptide_col="Phospho (STY) Probabilities",
+    acc_col="Protein",
+    position_col="Position",
+    position_in_peptide_col="Position in peptide",
+    sequence_window_col="Sequence window",
+    score_col="Localization prob",
+    description="My PTM analysis"
 )
 
-# Add PTM-specific UniProt data and mappings
-add_uniprot_data_ptm(payload, raw_file, de_file)
-
-# Optional: Add imputation map
-imputation_map = create_imputation_map(raw_file, primary_id_raw_col, sample_cols)
+add_uniprot_data_ptm(payload, "ptm_raw_data.txt", "ptm_differential_data.txt")
+imputation_map = create_imputation_map("ptm_raw_data.txt", "T: Unique identifier", sample_cols)
 add_imputation_map(payload, imputation_map)
 
-# Submit to CurtainPTM server
 package = {
     "enable": "True",
-    "description": description,
-    "curtain_type": "PTM",  # Important: Set to PTM for CurtainPTM
+    "description": "My PTM analysis",
+    "curtain_type": "PTM",
     "permanent": "False",
 }
 link_id = client.post_curtain_session(package, payload)
@@ -202,11 +162,9 @@ print(f"Access your PTM visualization at: https://curtainptm.proteo.info/#/{link
 <tr><td>curtain_type</td><td>Must be set to "PTM" for CurtainPTM submissions</td></tr>
 </table>
 
-**Important Notes for CurtainPTM:**
+**Notes for CurtainPTM:**
 - Use `add_uniprot_data_ptm()` instead of `add_uniprot_data()` for PTM data
-- The function requires both raw and differential data files for proper accession mapping
 - Raw data primary ID column typically has "T: " prefix (e.g., "T: Unique identifier")
-- PTM-specific columns are required for proper visualization
 - Set `curtain_type` to "PTM" in the submission package
 
 ### Common API payload creation parameters
@@ -418,3 +376,380 @@ payload = configure_general_plot_settings(payload,
     default_colors=colorblind_friendly
 )
 ```
+
+## Search Groups and Data Point Selection
+
+CurtainUtils provides search group functionality to create custom selections of proteins or data points and assign them colors for visualization. Search groups allow you to highlight specific proteins of interest across all visualizations.
+
+### Creating Search Groups
+
+#### Basic Search Groups
+
+```python
+from curtainutils.client import add_search_group
+
+add_search_group(
+    payload=payload,
+    group_name="Kinases of Interest", 
+    gene_names=["AKT1", "MTOR", "PIK3CA", "PTEN"],
+    color="#FF6B6B",
+    curtain_type="TP"
+)
+
+add_search_group(
+    payload=payload,
+    group_name="Key Targets",
+    protein_ids=["P31749", "P42345", "Q9Y243"],
+    color="#4ECDC4",
+    curtain_type="TP"
+)
+
+add_search_group(
+    payload=payload,
+    group_name="Mixed Selection",
+    gene_names=["TP53", "MYC"], 
+    protein_ids=["P04637"],
+    color="#45B7D1",
+    curtain_type="TP"
+)
+```
+
+#### Advanced Search Groups
+
+```python
+# Regex-based selection from raw data
+payload = create_search_group_from_regex(
+    payload=payload,
+    group_name="Histone Proteins",
+    pattern="HIST.*",
+    raw_df=raw_df,
+    search_column="Gene_Name", 
+    primary_id_col="Primary.IDs",
+    color="#9B59B6"
+)
+
+# Conditional selection based on data values
+payload = create_search_group_from_conditions(
+    payload=payload,
+    group_name="High FC Proteins",
+    raw_df=raw_df,
+    primary_id_col="Primary.IDs",
+    conditions={
+        "Log2_FC": lambda x: abs(x) > 2.0,
+        "P_Value": lambda x: x < 0.001
+    },
+    color="#E74C3C"
+)
+```
+
+#### Comparison-Specific Groups
+
+```python
+add_search_group(
+    payload=payload,
+    group_name="Treatment Response",
+    gene_names=["EGFR", "KRAS", "PIK3CA"],
+    color="#F39C12",
+    curtain_type="TP"
+)
+
+add_search_group(
+    payload=payload,
+    group_name="PTM Targets",
+    protein_ids=["P31749", "Q9Y243"],
+    color="#8E44AD",
+    curtain_type="PTM"
+)
+```
+
+### Search Group Parameters
+
+<table>
+<tr><th>Parameter</th><th>Description</th><th>Required</th></tr>
+<tr><td>group_name</td><td>Name for the search group</td><td>Yes</td></tr>
+<tr><td>gene_names</td><td>List of gene names to search for</td><td>No*</td></tr>
+<tr><td>protein_ids</td><td>List of protein/accession IDs</td><td>No*</td></tr>
+<tr><td>color</td><td>Hex color code for highlighting</td><td>No (auto-assigned)</td></tr>
+<tr><td>specific_comparison_label</td><td>Target specific comparison group</td><td>No</td></tr>
+</table>
+
+*At least one of `gene_names` or `protein_ids` must be provided.
+
+### Managing Multiple Search Groups
+
+```python
+groups = [
+    {"name": "Oncogenes", "genes": ["MYC", "KRAS", "PIK3CA"], "color": "#E74C3C"},
+    {"name": "Tumor Suppressors", "genes": ["TP53", "PTEN", "RB1"], "color": "#3498DB"},  
+    {"name": "DNA Repair", "genes": ["BRCA1", "BRCA2", "ATM"], "color": "#27AE60"},
+    {"name": "Cell Cycle", "genes": ["CDK1", "CDK2", "CCND1"], "color": "#F39C12"}
+]
+
+for group in groups:
+    add_search_group(
+        payload=payload,
+        group_name=group["name"],
+        gene_names=group["genes"], 
+        color=group["color"],
+        curtain_type="TP"
+    )
+```
+
+### Search Group Colors
+
+CurtainUtils automatically assigns colors if not specified, but you can use predefined color schemes:
+
+```python
+# Distinct color palette for multiple groups
+group_colors = [
+    "#FF6B6B", "#4ECDC4", "#45B7D1", "#FFA07A",
+    "#98D8C8", "#F7DC6F", "#BB8FCE", "#85C1E9"
+]
+
+pathways = {
+    "MAPK Signaling": ["MAPK1", "MAPK3", "RAF1"],
+    "PI3K/AKT": ["PIK3CA", "AKT1", "MTOR"], 
+    "p53 Pathway": ["TP53", "MDM2", "CDKN1A"],
+    "Cell Cycle": ["CDK1", "CDK2", "CCNB1"]
+}
+
+for i, (pathway, genes) in enumerate(pathways.items()):
+    add_search_group(
+        payload=payload,
+        group_name=pathway,
+        gene_names=genes,
+        color=group_colors[i % len(group_colors)],
+        curtain_type="TP"
+    )
+```
+
+### Working with Raw Data
+
+When working with custom datasets, you can reference raw data for more flexible searching:
+
+```python
+import pandas as pd
+
+# Load your raw data
+raw_df = pd.read_csv("proteomics_data.csv")
+
+high_abundance = raw_df[raw_df['Intensity'] > raw_df['Intensity'].quantile(0.9)]
+add_search_group(
+    payload=payload,
+    group_name="High Abundance",
+    protein_ids=high_abundance['Primary.IDs'].tolist(),
+    color="#E67E22",
+    curtain_type="TP"
+)
+
+membrane_proteins = raw_df[raw_df['Subcellular_Location'].str.contains('membrane', na=False)]
+add_search_group(
+    payload=payload, 
+    group_name="Membrane Proteins",
+    protein_ids=membrane_proteins['Primary.IDs'].tolist(),
+    color="#9B59B6",
+    curtain_type="TP"
+)
+```
+
+### Best Practices
+
+1. **Meaningful Names**: Use descriptive names that will be clear in the visualization
+2. **Color Coordination**: Choose colors that provide good contrast and are colorblind-friendly
+3. **Group Size**: Keep groups reasonably sized (10-50 proteins) for clear visualization
+4. **Biological Relevance**: Group proteins by pathway, function, or biological significance
+5. **Multiple Comparisons**: For Curtain datasets with multiple comparisons, consider whether you want comparison-specific groups
+
+### Integration with Visualizations
+
+Search groups automatically appear in:
+- **Volcano plots**: Highlighted points with group colors
+- **Bar charts**: Grouped and colored bars
+- **Profile plots**: Colored traces for group members
+- **Data tables**: Searchable and filterable by group
+
+The groups become interactive elements in the web interface, allowing users to:
+- Toggle group visibility
+- Filter data by group membership
+- Export group-specific results
+- Modify group colors and names
+
+## Custom Sample-Condition Mapping
+
+By default, CurtainUtils expects sample names to follow the `condition.replicate` format (e.g., "Control.1", "Treatment.2"). However, you can override this with custom sample-condition mappings for datasets with non-standard naming conventions.
+
+### Basic Sample Mapping
+
+```python
+from curtainutils.client import configure_sample_conditions
+
+# Define custom sample-to-condition mapping
+sample_mapping = {
+    'Sample_001': 'Control',
+    'Sample_002': 'Control', 
+    'Sample_003': 'Control',
+    'Sample_004': 'Treatment_A',
+    'Sample_005': 'Treatment_A',
+    'Sample_006': 'Treatment_A',
+    'Sample_007': 'Treatment_B',
+    'Sample_008': 'Treatment_B',
+    'Sample_009': 'Treatment_B'
+}
+
+# Configure custom colors for conditions
+condition_colors = {
+    'Control': '#808080',
+    'Treatment_A': '#FF6B6B', 
+    'Treatment_B': '#4ECDC4'
+}
+
+# Apply the mapping to your payload
+payload = configure_sample_conditions(
+    payload=payload,
+    sample_condition_map=sample_mapping,
+    condition_colors=condition_colors,
+    condition_order=['Control', 'Treatment_A', 'Treatment_B']
+)
+```
+
+### Automatic Pattern Detection
+
+CurtainUtils can analyze your sample names and suggest condition mappings:
+
+```python
+from curtainutils.client import detect_sample_patterns, validate_sample_mapping
+import pandas as pd
+
+# Load your raw data
+raw_df = pd.read_csv("proteomics_data.csv")
+
+# Get sample columns (exclude non-sample columns)
+sample_columns = [col for col in raw_df.columns 
+                 if col not in ['Primary.IDs', 'Gene.Name', 'Description']]
+
+# Detect potential condition patterns
+suggested_mapping = detect_sample_patterns(raw_df, sample_columns)
+print("Suggested mapping:", suggested_mapping)
+
+# Validate the mapping
+validation_results = validate_sample_mapping(raw_df, suggested_mapping)
+if validation_results['warnings']:
+    for warning in validation_results['warnings']:
+        print(f"Warning: {warning}")
+
+# Apply if satisfactory
+payload = configure_sample_conditions(payload, suggested_mapping)
+```
+
+### Supported Naming Patterns
+
+The pattern detection recognizes common sample naming conventions:
+
+| Pattern | Example | Detected Condition |
+|---------|---------|-------------------|
+| Standard format | `Control.1`, `Treatment.2` | `Control`, `Treatment` |
+| Underscore format | `Control_rep1`, `Treatment_A_rep2` | `Control`, `Treatment A` |
+| Common prefixes | `Ctrl01`, `Trt02`, `Drug03` | `Control`, `Treatment`, `Drug` |
+| Numeric grouping | `Sample1`, `Sample2`, `Sample3` | `Group_1` (groups by 3s) |
+| Custom alphanumeric | `CondA1`, `CondA2`, `CondB1` | `CondA`, `CondB` |
+
+### Complex Sample Organization
+
+For datasets with multiple experimental factors:
+
+```python
+# Multi-factor experiment: Treatment × Time Point
+sample_mapping = {
+    # Control samples
+    'Ctrl_4h_Rep1': 'Control_4h',
+    'Ctrl_4h_Rep2': 'Control_4h',
+    'Ctrl_4h_Rep3': 'Control_4h',
+    'Ctrl_24h_Rep1': 'Control_24h', 
+    'Ctrl_24h_Rep2': 'Control_24h',
+    'Ctrl_24h_Rep3': 'Control_24h',
+    
+    # Treatment samples  
+    'Drug_4h_Rep1': 'Treatment_4h',
+    'Drug_4h_Rep2': 'Treatment_4h',
+    'Drug_4h_Rep3': 'Treatment_4h',
+    'Drug_24h_Rep1': 'Treatment_24h',
+    'Drug_24h_Rep2': 'Treatment_24h', 
+    'Drug_24h_Rep3': 'Treatment_24h'
+}
+
+# Define condition colors
+condition_colors = {
+    'Control_4h': '#E8F4F8',
+    'Control_24h': '#4A90A4', 
+    'Treatment_4h': '#FADBD8',
+    'Treatment_24h': '#E74C3C'
+}
+
+# Set condition order for logical grouping
+condition_order = ['Control_4h', 'Control_24h', 'Treatment_4h', 'Treatment_24h']
+
+payload = configure_sample_conditions(
+    payload=payload,
+    sample_condition_map=sample_mapping,
+    condition_colors=condition_colors,
+    condition_order=condition_order
+)
+```
+
+### Validation and Quality Control
+
+The validation function checks for common issues:
+
+```python
+# Validate sample mapping against raw data
+validation = validate_sample_mapping(raw_df, sample_mapping)
+
+# Check validation results
+print("Validation Results:")
+print(f"Missing samples: {validation['missing_samples']}")
+print(f"Extra samples: {validation['extra_samples']}")  
+print(f"Unbalanced conditions: {validation['unbalanced_conditions']}")
+
+# Address any warnings
+if validation['warnings']:
+    print("Warnings found:")
+    for warning in validation['warnings']:
+        print(f"  - {warning}")
+```
+
+### Integration with Search Groups
+
+Custom sample mappings work seamlessly with search group functionality:
+
+```python
+# First configure sample conditions
+payload = configure_sample_conditions(payload, sample_mapping, condition_colors)
+
+add_search_group(
+    payload=payload,
+    group_name="Key Proteins", 
+    gene_names=["TP53", "MYC", "KRAS"],
+    color="#FF6B6B",
+    curtain_type="TP"
+)
+```
+
+### Parameters Reference
+
+#### `configure_sample_conditions()`
+
+<table>
+<tr><th>Parameter</th><th>Type</th><th>Description</th><th>Required</th></tr>
+<tr><td>payload</td><td>Dict</td><td>The payload to modify</td><td>Yes</td></tr>
+<tr><td>sample_condition_map</td><td>Dict[str, str]</td><td>Sample name to condition mapping</td><td>Yes</td></tr>
+<tr><td>condition_colors</td><td>Dict[str, str]</td><td>Condition to hex color mapping</td><td>No</td></tr>
+<tr><td>condition_order</td><td>List[str]</td><td>Order of conditions in visualizations</td><td>No</td></tr>
+</table>
+
+#### `detect_sample_patterns()`
+
+<table>
+<tr><th>Parameter</th><th>Type</th><th>Description</th><th>Required</th></tr>
+<tr><td>raw_df</td><td>pd.DataFrame</td><td>Raw data containing sample columns</td><td>Yes</td></tr>
+<tr><td>sample_columns</td><td>List[str]</td><td>List of sample column names</td><td>Yes</td></tr>
+</table>
