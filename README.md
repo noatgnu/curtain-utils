@@ -10,7 +10,7 @@ A utility package for preprocessing and uploading processed and analyzed mass sp
 
 ### Requirements
 
-- Python 3.6 or higher
+- Python 3.10 or higher
 - pip package manager
 
 ### Install from PyPI
@@ -753,3 +753,4 @@ add_search_group(
 <tr><td>raw_df</td><td>pd.DataFrame</td><td>Raw data containing sample columns</td><td>Yes</td></tr>
 <tr><td>sample_columns</td><td>List[str]</td><td>List of sample column names</td><td>Yes</td></tr>
 </table>
+
